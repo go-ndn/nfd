@@ -1,0 +1,14 @@
+{
+  "CertificatePath": "",
+  "LocalUrl": [
+    {
+      "Network": "tcp",
+      "Address": ":6363"
+    },
+    {
+      "Network": "unix",
+      "Address": "/var/run/nfd.sock"
+    }
+  ],
+  "RemoteUrl": []
+}

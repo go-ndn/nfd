@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"strings"
 )
 
 func prepare(n ndn.Name) (cs []lpm.Component) {
@@ -39,7 +38,6 @@ func (this *Face) Incoming() {
 			p.WriteTo(this.c)
 		case *ndn.Data:
 			key := prepare(p.Name)
-			//this.debug("pit match", this.pit.List())
 			e := this.pit.Match(key)
 			if e == nil {
 				// not in pit
@@ -68,19 +66,25 @@ func (this *Face) Outgoing() {
 		err := i.ReadFrom(r)
 		if err == nil {
 			// internal service
-			if strings.HasPrefix(i.Name.String(), "/localhost/nfd/") {
-				// TODO: authenticate
+			buf := new(bytes.Buffer)
+			i.WriteTo(buf)
+			c := new(ndn.ControlPacket)
+			err = c.ReadFrom(bufio.NewReader(buf))
+			if err == nil {
 				d := &ndn.Data{
 					Name: i.Name,
 				}
-				d.Content, _ = this.InternalDispatch(i)
+				d.Content, err = this.InternalDispatch(&c.Name)
+				if err != nil {
+					continue
+				}
 				d.WriteTo(this.c)
 				continue
 			}
 			key := prepare(i.Name)
 			e := ContentStore.RMatch(key)
 			if e != nil {
-				this.debug("interest found in content store", i.Name)
+				this.debug("data found in content store", i.Name)
 				e.(*ndn.Data).WriteTo(this.c)
 				// found in cache
 				continue
@@ -107,40 +111,25 @@ func (this *Face) Outgoing() {
 	}
 }
 
-func (this *Face) InternalDispatch(i *ndn.Interest) (b []byte, err error) {
-	this.debug("_", i.Name)
-	buf := new(bytes.Buffer)
-	i.WriteTo(buf)
-	c := new(ndn.ControlPacket)
-	err = c.ReadFrom(bufio.NewReader(buf))
-	if err != nil {
-		return
-	}
-	params := c.Name.Parameters.Parameters
-	fname := c.Name.Module + "." + c.Name.Command
-	defer func() {
-		if err != nil {
-			b, _ = ndn.Marshal(&ndn.ControlResponse{
-				StatusCode: 400,
-				StatusText: "Incorrect Parameters",
-				Parameters: params,
-			}, 101)
-			this.debug("_", 400, fname)
-		} else {
-			b, _ = ndn.Marshal(&ndn.ControlResponse{
-				StatusCode: 200,
-				StatusText: "OK",
-				Parameters: params,
-			}, 101)
-			this.debug("_", 200, fname)
+func (this *Face) InternalDispatch(c *ndn.Command) (b []byte, err error) {
+	service := c.Module + "." + c.Command
+	this.debug("_", service)
+	params := c.Parameters.Parameters
+	resp := RespOK
+	// todo: authenticate
+	if c.SignatureInfo.SignatureInfo.SignatureType == ndn.SignatureTypeDigestSha256 {
+		resp = RespNotAuthorized
+	} else {
+		switch service {
+		case "faces.create":
+		case "fib.add-nexthop":
+			this.fib.Set(prepare(params.Name), true)
+		case "fib.remove-nexthop":
+			this.fib.Update(prepare(params.Name), func(interface{}) interface{} { return nil })
+		default:
+			resp = RespNotSupported
 		}
-	}()
-
-	switch fname {
-	case "fib.add-nexthop":
-		this.fib.Set(prepare(params.Name), true)
-	case "fib.remove-nexthop":
-		this.fib.Update(prepare(params.Name), func(interface{}) interface{} { return nil })
 	}
+	b, err = ndn.Marshal(resp, 101)
 	return
 }
