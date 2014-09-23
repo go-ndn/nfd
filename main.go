@@ -65,8 +65,8 @@ func main() {
 	}
 
 	activeFaces := make(map[*Face]bool)
-	bcast := make(chan *InterestBcast)
-	bcastFib := make(chan *FibBcast)
+	bcast := make(chan *interestBcast)
+	bcastFib := make(chan *fibBcast)
 	closed := make(chan *Face)
 	create := make(chan net.Conn)
 	quit := make(chan os.Signal, 1)
@@ -107,9 +107,9 @@ func main() {
 				fib:          lpm.New(),
 				closed:       closed,
 				bcastFibSend: bcastFib,
-				bcastFibRecv: make(chan *FibBcast),
+				bcastFibRecv: make(chan *fibBcast),
 				bcastSend:    bcast,
-				bcastRecv:    make(chan *InterestBcast),
+				bcastRecv:    make(chan *interestBcast),
 				dataOut:      make(chan *ndn.Data),
 			}
 			activeFaces[f] = true

@@ -12,10 +12,10 @@ type Face struct {
 	*ndn.Face
 	fib          *lpm.Matcher
 	closed       chan *Face
-	bcastFibSend chan *FibBcast
-	bcastFibRecv chan *FibBcast
-	bcastSend    chan *InterestBcast
-	bcastRecv    chan *InterestBcast
+	bcastFibSend chan *fibBcast
+	bcastFibRecv chan *fibBcast
+	bcastSend    chan *interestBcast
+	bcastRecv    chan *interestBcast
 	dataOut      chan *ndn.Data
 }
 
@@ -41,12 +41,12 @@ func newSha256(v interface{}) (digest []byte, err error) {
 	return
 }
 
-type FibBcast struct {
+type fibBcast struct {
 	name ndn.Name
 	cost uint64
 }
 
-type InterestBcast struct {
+type interestBcast struct {
 	sender   chan *ndn.Data
 	interest *ndn.Interest
 }
@@ -76,7 +76,7 @@ func (this *Face) Listen() {
 				this.SendData(d)
 				continue
 			}
-			this.bcastSend <- &InterestBcast{
+			this.bcastSend <- &interestBcast{
 				interest: i,
 				sender:   this.dataOut,
 			}
@@ -137,13 +137,13 @@ func (this *Face) handleCommand(c *ndn.Command) (resp *ndn.ControlResponse) {
 			return
 		}
 		this.fib.Add(newLPMKey(params.Name), params.Cost)
-		this.bcastFibSend <- &FibBcast{
+		this.bcastFibSend <- &fibBcast{
 			name: params.Name,
 			cost: params.Cost + 1,
 		}
 	case "fib.remove-nexthop":
 		this.fib.Remove(newLPMKey(params.Name))
-		this.bcastFibSend <- &FibBcast{
+		this.bcastFibSend <- &fibBcast{
 			name: params.Name,
 		}
 	default:
