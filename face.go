@@ -10,11 +10,13 @@ import (
 
 type Face struct {
 	*ndn.Face
-	fib       *lpm.Matcher
-	closed    chan *Face
-	bcastSend chan *InterestBcast
-	bcastRecv chan *InterestBcast
-	dataOut   chan *ndn.Data
+	fib          *lpm.Matcher
+	closed       chan *Face
+	bcastFibSend chan *FibBcast
+	bcastFibRecv chan *FibBcast
+	bcastSend    chan *InterestBcast
+	bcastRecv    chan *InterestBcast
+	dataOut      chan *ndn.Data
 }
 
 func (this *Face) log(i ...interface{}) {
@@ -37,6 +39,11 @@ func newSha256(v interface{}) (digest []byte, err error) {
 	}
 	digest = h.Sum(nil)
 	return
+}
+
+type FibBcast struct {
+	name ndn.Name
+	cost uint64
 }
 
 type InterestBcast struct {
@@ -90,6 +97,22 @@ func (this *Face) Listen() {
 				}
 				b.sender <- d
 			}()
+		case b := <-this.bcastFibRecv:
+			e := this.fib.Match(newLPMKey(b.name))
+			if e != nil && e.(uint64) < b.cost {
+				continue
+			}
+			go func() {
+				var err error
+				if b.cost == 0 {
+					err = this.RemoveNextHop(b.name.String())
+				} else {
+					err = this.AddNextHop(b.name.String(), b.cost)
+				}
+				if err != nil {
+					this.log(err)
+				}
+			}()
 		case d := <-this.dataOut:
 			this.log("data returned", d.Name)
 			this.SendData(d)
@@ -101,23 +124,37 @@ func (this *Face) handleCommand(c *ndn.Command) (b []byte, err error) {
 	service := c.Module + "." + c.Command
 	this.log("_", service)
 	resp := RespOK
+	defer func() {
+		b, err = ndn.Marshal(resp, 101)
+	}()
 	digest, err := newSha256(c)
 	if err != nil {
 		return
 	}
 	if VerifyKey.Verify(digest, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
-	} else {
-		params := c.Parameters.Parameters
-		switch service {
-		case "fib.add-nexthop":
-			this.fib.Add(newLPMKey(params.Name), params.Cost)
-		case "fib.remove-nexthop":
-			this.fib.Remove(newLPMKey(params.Name))
-		default:
-			resp = RespNotSupported
-		}
+		return
 	}
-	b, err = ndn.Marshal(resp, 101)
+	params := c.Parameters.Parameters
+	switch service {
+	case "fib.add-nexthop":
+		if params.Cost == 0 {
+			resp = RespIncorrectParams
+			return
+		}
+		this.fib.Add(newLPMKey(params.Name), params.Cost)
+		this.bcastFibSend <- &FibBcast{
+			name: params.Name,
+			cost: params.Cost + 1,
+		}
+	case "fib.remove-nexthop":
+		this.fib.Remove(newLPMKey(params.Name))
+		this.bcastFibSend <- &FibBcast{
+			name: params.Name,
+		}
+	default:
+		resp = RespNotSupported
+	}
+
 	return
 }

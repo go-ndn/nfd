@@ -23,7 +23,7 @@ What is supported
 - [x] forwarding
 - [x] content store
 - [x] certificate
-- [ ] routing
+- [x] routing
 - [ ] ndn dns
 
 License

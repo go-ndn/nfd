@@ -66,6 +66,7 @@ func main() {
 
 	activeFaces := make(map[*Face]bool)
 	bcast := make(chan *InterestBcast)
+	bcastFib := make(chan *FibBcast)
 	closed := make(chan *Face)
 	create := make(chan net.Conn)
 	quit := make(chan os.Signal, 1)
@@ -102,12 +103,14 @@ func main() {
 		select {
 		case conn := <-create:
 			f := &Face{
-				Face:      ndn.NewFace(conn),
-				fib:       lpm.New(),
-				closed:    closed,
-				bcastSend: bcast,
-				bcastRecv: make(chan *InterestBcast),
-				dataOut:   make(chan *ndn.Data),
+				Face:         ndn.NewFace(conn),
+				fib:          lpm.New(),
+				closed:       closed,
+				bcastFibSend: bcastFib,
+				bcastFibRecv: make(chan *FibBcast),
+				bcastSend:    bcast,
+				bcastRecv:    make(chan *InterestBcast),
+				dataOut:      make(chan *ndn.Data),
 			}
 			activeFaces[f] = true
 			f.log("face created")
@@ -116,6 +119,10 @@ func main() {
 			// broadcast
 			for f := range activeFaces {
 				f.bcastRecv <- b
+			}
+		case b := <-bcastFib:
+			for f := range activeFaces {
+				f.bcastFibRecv <- b
 			}
 		case f := <-closed:
 			f.log("face removed")
