@@ -12,10 +12,6 @@ import (
 )
 
 var (
-	ActiveFaces = make(map[*Face]bool)
-)
-
-var (
 	configPath = flag.String("c", "nfd.json", "nfd config file path")
 )
 
@@ -26,9 +22,12 @@ func main() {
 		log.Fatal(err)
 	}
 
+	activeFaces := make(map[*Face]bool)
 	bcast := make(chan *InterestBcast)
 	closed := make(chan *Face)
 	create := make(chan net.Conn)
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	for _, u := range conf.LocalUrl {
 		ln, err := net.Listen(u.Network, u.Address)
@@ -57,8 +56,6 @@ func main() {
 		create <- conn
 	}
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	for {
 		select {
 		case conn := <-create:
@@ -70,17 +67,17 @@ func main() {
 				bcastRecv: make(chan *InterestBcast),
 				dataOut:   make(chan *ndn.Data),
 			}
-			ActiveFaces[f] = true
+			activeFaces[f] = true
 			f.log("face created")
 			go f.Listen()
 		case b := <-bcast:
 			// broadcast
-			for f := range ActiveFaces {
+			for f := range activeFaces {
 				f.bcastRecv <- b
 			}
 		case f := <-closed:
 			f.log("face removed")
-			delete(ActiveFaces, f)
+			delete(activeFaces, f)
 		case <-quit:
 			log.Println("goodbye nfd")
 			return
