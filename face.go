@@ -30,36 +30,28 @@ type InterestBcast struct {
 }
 
 func (this *Face) Listen() {
-	defer func() {
-		this.Close()
-		this.Closed <- this
-	}()
-	for {
-		select {
-		case i, ok := <-this.InterestIn:
-			if !ok {
-				return
+	for i := range this.InterestIn {
+		c := new(ndn.ControlInterest)
+		err := ndn.Copy(i, c)
+		if err == nil {
+			d := &ndn.Data{
+				Name: i.Name,
 			}
-			c := new(ndn.ControlInterest)
-			err := ndn.Copy(i, c)
-			if err == nil {
-				d := &ndn.Data{
-					Name: i.Name,
-				}
-				d.Content, err = this.InternalDispatch(&c.Name)
-				if err != nil {
-					continue
-				}
-				this.log("control response returned", d.Name)
-				this.SendData(d)
+			d.Content, err = this.InternalDispatch(&c.Name)
+			if err != nil {
 				continue
 			}
-			this.Bcast <- &InterestBcast{
-				Interest: i,
-				Sender:   this,
-			}
+			this.log("control response returned", d.Name)
+			this.SendData(d)
+			continue
+		}
+		this.Bcast <- &InterestBcast{
+			Interest: i,
+			Sender:   this,
 		}
 	}
+	this.Close()
+	this.Closed <- this
 }
 
 func (this *Face) InternalDispatch(c *ndn.Command) (b []byte, err error) {
