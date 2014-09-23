@@ -97,7 +97,7 @@ func main() {
 				}(b.Sender)
 			}
 			m.RUnlock()
-		case f := <-Closed:
+		case f := <-closed:
 			f.log("face removed")
 			m.Lock()
 			delete(ActiveFaces, f)
