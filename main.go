@@ -2,7 +2,7 @@ package main
 
 import (
 	"flag"
-	"github.com/taylorchu/lpm"
+	"github.com/taylorchu/ndn"
 	"log"
 	"net"
 	"os"
@@ -11,18 +11,8 @@ import (
 	"syscall"
 )
 
-type Face struct {
-	in     chan interface{}
-	out    chan interface{}
-	c      net.Conn
-	closed bool
-	pit    *lpm.Matcher
-	fib    *lpm.Matcher
-}
-
 var (
-	ActiveFaces  []*Face
-	ContentStore = lpm.New()
+	ActiveFaces = make(map[*Face]bool)
 )
 
 var (
@@ -36,9 +26,23 @@ func main() {
 		log.Fatal(err)
 	}
 
-	bcast := make(chan interface{})
-
+	bcast := make(chan *InterestBcast)
+	Closed := make(chan *Face)
 	var m sync.RWMutex
+
+	createFace := func(conn net.Conn) {
+		f := &Face{
+			Face:   ndn.NewFace(conn),
+			Closed: Closed,
+			Bcast:  bcast,
+		}
+		m.Lock()
+		ActiveFaces[f] = true
+		m.Unlock()
+		f.log("face created")
+		f.Listen()
+	}
+
 	for _, u := range conf.LocalUrl {
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
@@ -48,26 +52,22 @@ func main() {
 		log.Println("listening", u.Network, u.Address)
 		go func(ln net.Listener) {
 			for {
-				c, err := ln.Accept()
+				conn, err := ln.Accept()
 				if err != nil {
-					// handle error
+					log.Println(err)
 					continue
 				}
-				f := &Face{
-					in:  make(chan interface{}),
-					out: bcast,
-					c:   c,
-					pit: lpm.New(),
-					fib: lpm.New(),
-				}
-				m.Lock()
-				ActiveFaces = append(ActiveFaces, f)
-				m.Unlock()
-				log.Println("face created", c.RemoteAddr())
-				go f.Incoming()
-				go f.Outgoing()
+				go createFace(conn)
 			}
 		}(ln)
+	}
+
+	for _, u := range conf.RemoteUrl {
+		conn, err := net.Dial(u.Network, u.Address)
+		if err != nil {
+			log.Fatal(err)
+		}
+		go createFace(conn)
 	}
 
 	quit := make(chan os.Signal, 1)
@@ -75,24 +75,33 @@ func main() {
 	for {
 		select {
 		case <-quit:
-			log.Println("goodbye, nfd")
+			log.Println("goodbye nfd")
 			return
-		case packet := <-bcast:
+		case b := <-bcast:
 			// broadcast
 			m.RLock()
-			for _, f := range ActiveFaces {
-				f.in <- packet
+			for f := range ActiveFaces {
+				if f.Fib.Match(newLPMKey(b.Interest.Name)) == nil {
+					continue
+				}
+				f.log("interest forwarded", b.Interest.Name)
+				ch, err := f.SendInterest(b.Interest)
+				if err != nil {
+					log.Println(err)
+					continue
+				}
+				go func(f *Face) {
+					d := <-ch
+					f.log("data returned", d.Name)
+					f.SendData(d)
+				}(b.Sender)
 			}
 			m.RUnlock()
-		default:
-			for i := len(ActiveFaces) - 1; i >= 0; i-- {
-				if ActiveFaces[i].closed {
-					log.Println("face removed", ActiveFaces[i].c.RemoteAddr())
-					m.Lock()
-					ActiveFaces = append(ActiveFaces[:i], ActiveFaces[i+1:]...)
-					m.Unlock()
-				}
-			}
+		case f := <-Closed:
+			f.log("face removed")
+			m.Lock()
+			delete(ActiveFaces, f)
+			m.Unlock()
 		}
 	}
 }

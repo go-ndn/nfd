@@ -13,6 +13,7 @@ type Config struct {
 	LocalUrl        []Url
 	RemoteUrl       []Url
 	CertificatePath string
+	PrivateKeyPath  string
 }
 
 func NewConfig(file string) (c *Config, err error) {
