@@ -68,7 +68,7 @@ func (this *Face) Listen() {
 				d := &ndn.Data{
 					Name: i.Name,
 				}
-				d.Content, err = this.handleCommand(&c.Name)
+				d.Content, err = ndn.Marshal(this.handleCommand(&c.Name), 101)
 				if err != nil {
 					continue
 				}
@@ -120,21 +120,15 @@ func (this *Face) Listen() {
 	}
 }
 
-func (this *Face) handleCommand(c *ndn.Command) (b []byte, err error) {
+func (this *Face) handleCommand(c *ndn.Command) (resp *ndn.ControlResponse) {
 	service := c.Module + "." + c.Command
 	this.log("_", service)
-	resp := RespOK
-	defer func() {
-		b, err = ndn.Marshal(resp, 101)
-	}()
 	digest, err := newSha256(c)
-	if err != nil {
-		return
-	}
-	if VerifyKey.Verify(digest, c.SignatureValue.SignatureValue) != nil {
+	if err != nil || VerifyKey.Verify(digest, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
 		return
 	}
+	resp = RespOK
 	params := c.Parameters.Parameters
 	switch service {
 	case "fib.add-nexthop":
@@ -155,6 +149,5 @@ func (this *Face) handleCommand(c *ndn.Command) (b []byte, err error) {
 	default:
 		resp = RespNotSupported
 	}
-
 	return
 }
