@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"sync"
 	"syscall"
 )
 
@@ -28,20 +27,7 @@ func main() {
 
 	bcast := make(chan *InterestBcast)
 	closed := make(chan *Face)
-	var m sync.RWMutex
-
-	createFace := func(conn net.Conn) {
-		f := &Face{
-			Face:   ndn.NewFace(conn),
-			Closed: closed,
-			Bcast:  bcast,
-		}
-		m.Lock()
-		ActiveFaces[f] = true
-		m.Unlock()
-		f.log("face created")
-		f.Listen()
-	}
+	create := make(chan net.Conn)
 
 	for _, u := range conf.LocalUrl {
 		ln, err := net.Listen(u.Network, u.Address)
@@ -57,7 +43,7 @@ func main() {
 					log.Println(err)
 					continue
 				}
-				go createFace(conn)
+				create <- conn
 			}
 		}()
 	}
@@ -67,19 +53,24 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
-		go createFace(conn)
+		create <- conn
 	}
 
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	for {
 		select {
-		case <-quit:
-			log.Println("goodbye nfd")
-			return
+		case conn := <-create:
+			f := &Face{
+				Face:   ndn.NewFace(conn),
+				Closed: closed,
+				Bcast:  bcast,
+			}
+			ActiveFaces[f] = true
+			f.log("face created")
+			go f.Listen()
 		case b := <-bcast:
 			// broadcast
-			m.RLock()
 			for f := range ActiveFaces {
 				if f.Fib.Match(newLPMKey(b.Interest.Name)) == nil {
 					continue
@@ -99,12 +90,12 @@ func main() {
 					b.Sender.SendData(d)
 				}()
 			}
-			m.RUnlock()
 		case f := <-closed:
 			f.log("face removed")
-			m.Lock()
 			delete(ActiveFaces, f)
-			m.Unlock()
+		case <-quit:
+			log.Println("goodbye nfd")
+			return
 		}
 	}
 }
