@@ -50,7 +50,7 @@ func main() {
 		}
 		defer ln.Close()
 		log.Println("listening", u.Network, u.Address)
-		go func(ln net.Listener) {
+		go func() {
 			for {
 				conn, err := ln.Accept()
 				if err != nil {
@@ -59,7 +59,7 @@ func main() {
 				}
 				go createFace(conn)
 			}
-		}(ln)
+		}()
 	}
 
 	for _, u := range conf.RemoteUrl {
@@ -90,11 +90,14 @@ func main() {
 					log.Println(err)
 					continue
 				}
-				go func(f *Face) {
-					d := <-ch
-					f.log("data returned", d.Name)
-					f.SendData(d)
-				}(b.Sender)
+				go func() {
+					d, ok := <-ch
+					if !ok {
+						return
+					}
+					b.Sender.log("data returned", d.Name)
+					b.Sender.SendData(d)
+				}()
 			}
 			m.RUnlock()
 		case f := <-closed:
