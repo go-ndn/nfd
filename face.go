@@ -8,8 +8,11 @@ import (
 
 type Face struct {
 	*ndn.Face
-	Closed chan *Face
-	Bcast  chan *InterestBcast
+	fib       *lpm.Matcher
+	closed    chan *Face
+	bcastSend chan *InterestBcast
+	bcastRecv chan *InterestBcast
+	dataOut   chan *ndn.Data
 }
 
 func (this *Face) log(i ...interface{}) {
@@ -25,36 +28,64 @@ func newLPMKey(n ndn.Name) (cs []lpm.Component) {
 }
 
 type InterestBcast struct {
-	Sender   *Face
-	Interest *ndn.Interest
+	sender   chan *ndn.Data
+	interest *ndn.Interest
 }
 
 func (this *Face) Listen() {
-	for i := range this.InterestIn {
-		c := new(ndn.ControlInterest)
-		err := ndn.Copy(i, c)
-		if err == nil {
-			d := &ndn.Data{
-				Name: i.Name,
+	defer func() {
+		this.Close()
+		this.closed <- this
+	}()
+	for {
+		select {
+		case i, ok := <-this.InterestIn:
+			if !ok {
+				return
 			}
-			d.Content, err = this.InternalDispatch(&c.Name)
-			if err != nil {
+			c := new(ndn.ControlInterest)
+			err := ndn.Copy(i, c)
+			if err == nil {
+				d := &ndn.Data{
+					Name: i.Name,
+				}
+				d.Content, err = this.internalDispatch(&c.Name)
+				if err != nil {
+					continue
+				}
+				this.log("control response returned", d.Name)
+				this.SendData(d)
 				continue
 			}
-			this.log("control response returned", d.Name)
+			this.bcastSend <- &InterestBcast{
+				interest: i,
+				sender:   this.dataOut,
+			}
+		case b := <-this.bcastRecv:
+			if this.fib.Match(newLPMKey(b.interest.Name)) == nil {
+				continue
+			}
+			this.log("interest forwarded", b.interest.Name)
+			ch, err := this.SendInterest(b.interest)
+			if err != nil {
+				this.log(err)
+				continue
+			}
+			go func() {
+				d, ok := <-ch
+				if !ok {
+					return
+				}
+				b.sender <- d
+			}()
+		case d := <-this.dataOut:
+			this.log("data returned", d.Name)
 			this.SendData(d)
-			continue
-		}
-		this.Bcast <- &InterestBcast{
-			Interest: i,
-			Sender:   this,
 		}
 	}
-	this.Close()
-	this.Closed <- this
 }
 
-func (this *Face) InternalDispatch(c *ndn.Command) (b []byte, err error) {
+func (this *Face) internalDispatch(c *ndn.Command) (b []byte, err error) {
 	service := c.Module + "." + c.Command
 	this.log("_", service)
 	params := c.Parameters.Parameters
@@ -62,9 +93,9 @@ func (this *Face) InternalDispatch(c *ndn.Command) (b []byte, err error) {
 	// todo: authenticate
 	switch service {
 	case "fib.add-nexthop":
-		this.Fib.Add(newLPMKey(params.Name), 0)
+		this.fib.Add(newLPMKey(params.Name), params.Cost)
 	case "fib.remove-nexthop":
-		this.Fib.Remove(newLPMKey(params.Name))
+		this.fib.Remove(newLPMKey(params.Name))
 	default:
 		resp = RespNotSupported
 	}

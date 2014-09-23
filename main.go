@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
 	"log"
 	"net"
@@ -62,9 +63,12 @@ func main() {
 		select {
 		case conn := <-create:
 			f := &Face{
-				Face:   ndn.NewFace(conn),
-				Closed: closed,
-				Bcast:  bcast,
+				Face:      ndn.NewFace(conn),
+				fib:       lpm.New(),
+				closed:    closed,
+				bcastSend: bcast,
+				bcastRecv: make(chan *InterestBcast),
+				dataOut:   make(chan *ndn.Data),
 			}
 			ActiveFaces[f] = true
 			f.log("face created")
@@ -72,23 +76,7 @@ func main() {
 		case b := <-bcast:
 			// broadcast
 			for f := range ActiveFaces {
-				if f.Fib.Match(newLPMKey(b.Interest.Name)) == nil {
-					continue
-				}
-				f.log("interest forwarded", b.Interest.Name)
-				ch, err := f.SendInterest(b.Interest)
-				if err != nil {
-					log.Println(err)
-					continue
-				}
-				go func() {
-					d, ok := <-ch
-					if !ok {
-						return
-					}
-					b.Sender.log("data returned", d.Name)
-					b.Sender.SendData(d)
-				}()
+				f.bcastRecv <- b
 			}
 		case f := <-closed:
 			f.log("face removed")
