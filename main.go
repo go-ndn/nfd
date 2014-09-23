@@ -27,13 +27,13 @@ func main() {
 	}
 
 	bcast := make(chan *InterestBcast)
-	Closed := make(chan *Face)
+	closed := make(chan *Face)
 	var m sync.RWMutex
 
 	createFace := func(conn net.Conn) {
 		f := &Face{
 			Face:   ndn.NewFace(conn),
-			Closed: Closed,
+			Closed: closed,
 			Bcast:  bcast,
 		}
 		m.Lock()
