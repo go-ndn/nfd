@@ -1,5 +1,6 @@
 {
-  "CertificatePath": "",
+  "CertificatePath": "key/default.ndncert",
+  "PrivateKeyPath": "key/default.pri",
   "LocalUrl": [
     {
       "Network": "tcp",

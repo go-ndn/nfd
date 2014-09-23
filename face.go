@@ -1,9 +1,11 @@
 package main
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
+	"github.com/taylorchu/tlv"
 )
 
 type Face struct {
@@ -24,6 +26,16 @@ func newLPMKey(n ndn.Name) (cs []lpm.Component) {
 	for _, c := range n.Components {
 		cs = append(cs, lpm.Component(c))
 	}
+	return
+}
+
+func newSha256(v interface{}) (digest []byte, err error) {
+	h := sha256.New()
+	err = tlv.Data(h, v)
+	if err != nil {
+		return
+	}
+	digest = h.Sum(nil)
 	return
 }
 
@@ -49,7 +61,7 @@ func (this *Face) Listen() {
 				d := &ndn.Data{
 					Name: i.Name,
 				}
-				d.Content, err = this.internalDispatch(&c.Name)
+				d.Content, err = this.handleCommand(&c.Name)
 				if err != nil {
 					continue
 				}
@@ -85,19 +97,26 @@ func (this *Face) Listen() {
 	}
 }
 
-func (this *Face) internalDispatch(c *ndn.Command) (b []byte, err error) {
+func (this *Face) handleCommand(c *ndn.Command) (b []byte, err error) {
 	service := c.Module + "." + c.Command
 	this.log("_", service)
-	params := c.Parameters.Parameters
 	resp := RespOK
-	// todo: authenticate
-	switch service {
-	case "fib.add-nexthop":
-		this.fib.Add(newLPMKey(params.Name), params.Cost)
-	case "fib.remove-nexthop":
-		this.fib.Remove(newLPMKey(params.Name))
-	default:
-		resp = RespNotSupported
+	digest, err := newSha256(c)
+	if err != nil {
+		return
+	}
+	if VerifyKey.Verify(digest, c.SignatureValue.SignatureValue) != nil {
+		resp = RespNotAuthorized
+	} else {
+		params := c.Parameters.Parameters
+		switch service {
+		case "fib.add-nexthop":
+			this.fib.Add(newLPMKey(params.Name), params.Cost)
+		case "fib.remove-nexthop":
+			this.fib.Remove(newLPMKey(params.Name))
+		default:
+			resp = RespNotSupported
+		}
 	}
 	b, err = ndn.Marshal(resp, 101)
 	return
