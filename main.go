@@ -68,7 +68,7 @@ func main() {
 	bcast := make(chan *interestBcast)
 	bcastFib := make(chan *fibBcast)
 	closed := make(chan *Face)
-	create := make(chan net.Conn)
+	create := make(chan net.Conn, len(conf.RemoteUrl))
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
