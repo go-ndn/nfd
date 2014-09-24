@@ -24,13 +24,6 @@ func (this *Face) log(i ...interface{}) {
 	fmt.Println(i...)
 }
 
-func newLPMKey(n ndn.Name) (cs []lpm.Component) {
-	for _, c := range n.Components {
-		cs = append(cs, lpm.Component(c))
-	}
-	return
-}
-
 func newSha256(v interface{}) (digest []byte, err error) {
 	h := sha256.New()
 	err = tlv.Data(h, v)
@@ -81,7 +74,7 @@ func (this *Face) Listen() {
 				sender:   this.dataOut,
 			}
 		case b := <-this.bcastRecv:
-			if this.fib.Match(newLPMKey(b.interest.Name)) == nil {
+			if this.fib.Match(b.interest.Name) == nil {
 				continue
 			}
 			this.log("interest forwarded", b.interest.Name)
@@ -98,21 +91,19 @@ func (this *Face) Listen() {
 				b.sender <- d
 			}()
 		case b := <-this.bcastFibRecv:
-			e := this.fib.Match(newLPMKey(b.name))
+			e := this.fib.Match(b.name)
 			if e != nil && e.(uint64) < b.cost {
 				continue
 			}
-			go func() {
-				var err error
-				if b.cost == 0 {
-					err = this.RemoveNextHop(b.name.String())
-				} else {
-					err = this.AddNextHop(b.name.String(), b.cost)
+			if b.cost == 0 {
+				if nil == this.RemoveNextHop(b.name.String()) {
+					this.log("remove next hop", b.name)
 				}
-				if err != nil {
-					this.log(err)
+			} else {
+				if nil == this.AddNextHop(b.name.String(), b.cost) {
+					this.log("add next hop", b.name, b.cost)
 				}
-			}()
+			}
 		case d := <-this.dataOut:
 			this.log("data returned", d.Name)
 			this.SendData(d)
@@ -136,13 +127,13 @@ func (this *Face) handleCommand(c *ndn.Command) (resp *ndn.ControlResponse) {
 			resp = RespIncorrectParams
 			return
 		}
-		this.fib.Add(newLPMKey(params.Name), params.Cost)
+		this.fib.Add(params.Name, params.Cost)
 		this.bcastFibSend <- &fibBcast{
 			name: params.Name,
 			cost: params.Cost + 1,
 		}
 	case "fib.remove-nexthop":
-		this.fib.Remove(newLPMKey(params.Name))
+		this.fib.Remove(params.Name)
 		this.bcastFibSend <- &fibBcast{
 			name: params.Name,
 		}
