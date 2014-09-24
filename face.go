@@ -1,11 +1,9 @@
 package main
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"github.com/taylorchu/tlv"
 )
 
 type Face struct {
@@ -22,16 +20,6 @@ type Face struct {
 func (this *Face) log(i ...interface{}) {
 	fmt.Printf("[%s] ", this.RemoteAddr())
 	fmt.Println(i...)
-}
-
-func newSha256(v interface{}) (digest []byte, err error) {
-	h := sha256.New()
-	err = tlv.Data(h, v)
-	if err != nil {
-		return
-	}
-	digest = h.Sum(nil)
-	return
 }
 
 type fibBcast struct {
@@ -114,8 +102,7 @@ func (this *Face) Listen() {
 func (this *Face) handleCommand(c *ndn.Command) (resp *ndn.ControlResponse) {
 	service := c.Module + "." + c.Command
 	this.log("_", service)
-	digest, err := newSha256(c)
-	if err != nil || VerifyKey.Verify(digest, c.SignatureValue.SignatureValue) != nil {
+	if VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
 		return
 	}
