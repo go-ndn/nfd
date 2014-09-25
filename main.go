@@ -99,12 +99,6 @@ func main() {
 	}()
 
 	for _, u := range conf.LocalUrl {
-		// clean up unix socket
-		if u.Network == "unix" {
-			if _, err := os.Stat(u.Address); err == nil {
-				os.Remove(u.Address)
-			}
-		}
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
 			log.Fatal(err)
@@ -124,11 +118,16 @@ func main() {
 	}
 
 	for _, u := range conf.RemoteUrl {
-		conn, err := net.Dial(u.Network, u.Address)
-		if err != nil {
-			log.Fatal(err)
+		for {
+			// retry until connection established
+			conn, err := net.Dial(u.Network, u.Address)
+			if err != nil {
+				log.Println(err)
+				continue
+			}
+			create <- conn
+			break
 		}
-		create <- conn
 	}
 
 	quit := make(chan os.Signal, 1)
