@@ -8,13 +8,12 @@ import (
 
 type Face struct {
 	*ndn.Face
-	fib          *lpm.Matcher
-	closed       chan *Face
-	bcastFibSend chan *fibBcast
-	bcastFibRecv chan *fibBcast
-	bcastSend    chan *interestBcast
-	bcastRecv    chan *interestBcast
-	dataOut      chan *ndn.Data
+	fib        *lpm.Matcher
+	closed     chan<- *Face // unregister current face
+	bcastSend  chan<- *bcast
+	bcastRecv  chan *bcast
+	interestIn <-chan *ndn.Interest
+	dataOut    chan *ndn.Data // data that will be written to current face
 }
 
 func (this *Face) log(i ...interface{}) {
@@ -22,30 +21,59 @@ func (this *Face) log(i ...interface{}) {
 	fmt.Println(i...)
 }
 
-type fibBcast struct {
-	name ndn.Name
-	cost uint64
-}
-
-type interestBcast struct {
-	sender   chan *ndn.Data
+type bcast struct {
+	from     chan<- *ndn.Data // direct to original face
+	to       <-chan *ndn.Data // save request after sending interest
+	data     *ndn.Data        // fetch data and save it
 	interest *ndn.Interest
 }
 
 func (this *Face) Listen() {
-	defer func() {
-		this.Close()
-		this.closed <- this
-	}()
+	var sendPending []*bcast
+	var recvPending []*bcast
+	var retPending []*bcast
 	for {
+		// send interest to other face
+		var send chan<- *bcast
+		var sendFirst *bcast
+		if len(sendPending) > 0 {
+			sendFirst = sendPending[0]
+			send = this.bcastSend
+		}
+
+		// fetch data from this face
+		var recvFirst *bcast
+		var recv <-chan *ndn.Data
+		if len(recvPending) > 0 {
+			recvFirst = recvPending[0]
+			recv = recvFirst.to
+		}
+
+		// send data to requesting face
+		var retFirst *ndn.Data
+		var ret chan<- *ndn.Data
+		if len(retPending) > 0 {
+			retFirst = retPending[0].data
+			ret = retPending[0].from
+		}
+
+		var closed chan<- *Face
+		if len(sendPending) == 0 && len(recvPending) == 0 && len(retPending) == 0 && this.interestIn == nil {
+			closed = this.closed
+		}
 		select {
-		case i, ok := <-this.InterestIn:
+		case i, ok := <-this.interestIn:
+			this.log("interest in")
 			if !ok {
-				return
+				// this face will not accept new interest
+				this.interestIn = nil
+				this.log("face idle")
+				continue
 			}
 			c := new(ndn.ControlInterest)
 			err := ndn.Copy(i, c)
 			if err == nil {
+				// do not forward command to other faces
 				d := &ndn.Data{
 					Name: i.Name,
 				}
@@ -57,44 +85,37 @@ func (this *Face) Listen() {
 				this.SendData(d)
 				continue
 			}
-			this.bcastSend <- &interestBcast{
+			sendPending = append(sendPending, &bcast{
 				interest: i,
-				sender:   this.dataOut,
-			}
+				from:     this.dataOut,
+			})
+		case send <- sendFirst:
+			sendPending = sendPending[1:]
 		case b := <-this.bcastRecv:
 			if this.fib.Match(b.interest.Name) == nil {
 				continue
 			}
 			this.log("interest forwarded", b.interest.Name)
-			ch, err := this.SendInterest(b.interest)
+			var err error
+			b.to, err = this.SendInterest(b.interest)
 			if err != nil {
 				this.log(err)
 				continue
 			}
-			go func() {
-				d, ok := <-ch
-				if !ok {
-					return
-				}
-				b.sender <- d
-			}()
-		case b := <-this.bcastFibRecv:
-			e := this.fib.Match(b.name)
-			if e != nil && e.(uint64) < b.cost {
-				continue
+			recvPending = append(recvPending, b)
+		case recvFirst.data = <-recv:
+			recvPending = recvPending[1:]
+			if recvFirst.data != nil {
+				retPending = append(retPending, recvFirst)
 			}
-			if b.cost == 0 {
-				if nil == this.RemoveNextHop(b.name.String()) {
-					this.log("remove next hop", b.name)
-				}
-			} else {
-				if nil == this.AddNextHop(b.name.String(), b.cost) {
-					this.log("add next hop", b.name, b.cost)
-				}
-			}
+		case ret <- retFirst:
+			retPending = retPending[1:]
 		case d := <-this.dataOut:
 			this.log("data returned", d.Name)
 			this.SendData(d)
+		case closed <- this:
+			this.Close()
+			return
 		}
 	}
 }
@@ -115,15 +136,8 @@ func (this *Face) handleCommand(c *ndn.Command) (resp *ndn.ControlResponse) {
 			return
 		}
 		this.fib.Add(params.Name, params.Cost)
-		this.bcastFibSend <- &fibBcast{
-			name: params.Name,
-			cost: params.Cost + 1,
-		}
 	case "fib.remove-nexthop":
 		this.fib.Remove(params.Name)
-		this.bcastFibSend <- &fibBcast{
-			name: params.Name,
-		}
 	default:
 		resp = RespNotSupported
 	}

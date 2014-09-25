@@ -64,15 +64,46 @@ func main() {
 		log.Fatal(err)
 	}
 
-	activeFaces := make(map[*Face]bool)
-	bcast := make(chan *interestBcast)
-	bcastFib := make(chan *fibBcast)
-	closed := make(chan *Face)
-	create := make(chan net.Conn, len(conf.RemoteUrl))
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	create := make(chan net.Conn)
+
+	go func() {
+		activeFaces := make(map[*Face]bool)
+		bcastSend := make(chan *bcast)
+		closed := make(chan *Face)
+		for {
+			select {
+			case conn := <-create:
+				ch := make(chan *ndn.Interest)
+				f := &Face{
+					Face:       ndn.NewFace(conn, ch),
+					fib:        lpm.New(),
+					closed:     closed,
+					bcastSend:  bcastSend,
+					bcastRecv:  make(chan *bcast),
+					interestIn: ch,
+					dataOut:    make(chan *ndn.Data),
+				}
+				activeFaces[f] = true
+				f.log("face created")
+				go f.Listen()
+			case b := <-bcastSend:
+				for f := range activeFaces {
+					f.bcastRecv <- b
+				}
+			case f := <-closed:
+				delete(activeFaces, f)
+				f.log("face removed")
+			}
+		}
+	}()
 
 	for _, u := range conf.LocalUrl {
+		// clean up unix socket
+		if u.Network == "unix" {
+			if _, err := os.Stat(u.Address); err == nil {
+				os.Remove(u.Address)
+			}
+		}
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
 			log.Fatal(err)
@@ -99,37 +130,8 @@ func main() {
 		create <- conn
 	}
 
-	for {
-		select {
-		case conn := <-create:
-			f := &Face{
-				Face:         ndn.NewFace(conn),
-				fib:          lpm.New(),
-				closed:       closed,
-				bcastFibSend: bcastFib,
-				bcastFibRecv: make(chan *fibBcast),
-				bcastSend:    bcast,
-				bcastRecv:    make(chan *interestBcast),
-				dataOut:      make(chan *ndn.Data),
-			}
-			activeFaces[f] = true
-			f.log("face created")
-			go f.Listen()
-		case b := <-bcast:
-			// broadcast
-			for f := range activeFaces {
-				f.bcastRecv <- b
-			}
-		case b := <-bcastFib:
-			for f := range activeFaces {
-				f.bcastFibRecv <- b
-			}
-		case f := <-closed:
-			f.log("face removed")
-			delete(activeFaces, f)
-		case <-quit:
-			log.Println("goodbye nfd")
-			return
-		}
-	}
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
+	<-quit
+	log.Println("goodbye nfd")
 }
