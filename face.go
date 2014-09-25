@@ -85,6 +85,12 @@ func (this *Face) Listen() {
 				this.SendData(d)
 				continue
 			}
+			// check for loop
+			id := i.Name.String() + string(i.Nonce)
+			if Forwarded[id] {
+				continue
+			}
+			Forwarded[id] = true
 			sendPending = append(sendPending, &bcast{
 				interest: i,
 				from:     this.dataOut,

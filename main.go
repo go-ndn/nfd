@@ -20,6 +20,7 @@ var (
 
 var (
 	VerifyKey *ndn.Key
+	Forwarded = make(map[string]bool) // check for interest loop
 )
 
 func decodePrivateKey(file string) (err error) {
