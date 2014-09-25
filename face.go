@@ -98,7 +98,8 @@ func (this *Face) Listen() {
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
 		case b := <-this.bcastRecv:
-			if this.fib.Match(b.interest.Name) == nil {
+			// interest name is the longest prefix of fib name
+			if this.fib.RMatch(b.interest.Name) == nil {
 				continue
 			}
 			this.log("interest forwarded", b.interest.Name)
