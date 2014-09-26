@@ -158,15 +158,13 @@ func main() {
 }
 
 func handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
-	service := c.Module + "." + c.Command
-	f.log("_", service)
 	if VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
 		return
 	}
 	resp = RespOK
 	params := c.Parameters.Parameters
-	switch service {
+	switch c.Module + "." + c.Command {
 	case "fib.add-nexthop":
 		addNextHop(params.Name, f)
 	case "fib.remove-nexthop":
