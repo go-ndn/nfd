@@ -7,7 +7,7 @@ import (
 
 type Face struct {
 	*ndn.Face
-	nextHops   map[string]bool // names in fib
+	fibNames   map[string]bool // names in fib
 	closed     chan<- *Face    // unregister current face
 	bcastSend  chan<- *bcast
 	bcastRecv  chan *bcast

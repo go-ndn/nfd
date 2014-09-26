@@ -77,7 +77,7 @@ func main() {
 				ch := make(chan *ndn.Interest)
 				f := &Face{
 					Face:       ndn.NewFace(conn, ch),
-					nextHops:   make(map[string]bool),
+					fibNames:   make(map[string]bool),
 					bcastSend:  bcastSend,
 					bcastRecv:  make(chan *bcast),
 					interestIn: ch,
@@ -109,9 +109,9 @@ func main() {
 						ch <- b
 					}
 					return chs
-				}, false)
+				}, true)
 			case f := <-closed:
-				for nextHop := range f.nextHops {
+				for nextHop := range f.fibNames {
 					removeNextHop(ndn.NewName(nextHop), f)
 				}
 				f.log("face removed")
@@ -180,7 +180,7 @@ func handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
 func addNextHop(name ndn.Name, f *Face) {
 	Fib.Update(name, func(chs interface{}) interface{} {
 		f.log("add-nexthop", name)
-		f.nextHops[name.String()] = true
+		f.fibNames[name.String()] = true
 		if chs == nil {
 			return map[chan<- *bcast]bool{f.bcastRecv: true}
 		}
@@ -192,7 +192,7 @@ func addNextHop(name ndn.Name, f *Face) {
 func removeNextHop(name ndn.Name, f *Face) {
 	Fib.Update(name, func(chs interface{}) interface{} {
 		f.log("remove-nexthop", name)
-		delete(f.nextHops, name.String())
+		delete(f.fibNames, name.String())
 		if chs == nil {
 			return nil
 		}
