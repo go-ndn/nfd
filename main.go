@@ -101,15 +101,13 @@ func main() {
 					b.sender.dataOut <- d
 					continue
 				}
-				Fib.Update(b.interest.Name, func(chs interface{}) interface{} {
-					if chs == nil {
-						return nil
-					}
-					for ch := range chs.(map[chan<- *bcast]bool) {
-						ch <- b
-					}
-					return chs
-				}, true)
+				chs := Fib.Match(b.interest.Name)
+				if chs == nil {
+					continue
+				}
+				for ch := range chs.(map[chan<- *bcast]bool) {
+					ch <- b
+				}
 			case f := <-closed:
 				for nextHop := range f.fibNames {
 					removeNextHop(ndn.NewName(nextHop), f)
