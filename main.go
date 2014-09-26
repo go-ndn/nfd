@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/base64"
 	"flag"
+	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
 	"io/ioutil"
@@ -14,13 +15,17 @@ import (
 	"syscall"
 )
 
+const (
+	bufSize = 0
+)
+
 var (
 	configPath = flag.String("c", "nfd.json", "nfd config file path")
 )
 
 var (
 	VerifyKey *ndn.Key
-	Forwarded = make(map[string]bool) // check for interest loop
+	Forwarded = exact.New() // check for interest loop
 	Fib       = lpm.New()
 )
 
@@ -66,22 +71,22 @@ func main() {
 		log.Fatal(err)
 	}
 
-	create := make(chan net.Conn)
+	create := make(chan net.Conn, bufSize)
 
 	go func() {
-		bcastSend := make(chan *bcast)
-		closed := make(chan *Face)
+		bcastSend := make(chan *bcast, bufSize)
+		closed := make(chan *Face, bufSize)
 		for {
 			select {
 			case conn := <-create:
-				ch := make(chan *ndn.Interest)
+				ch := make(chan *ndn.Interest, bufSize)
 				f := &Face{
 					Face:       ndn.NewFace(conn, ch),
 					fibNames:   make(map[string]bool),
 					bcastSend:  bcastSend,
-					bcastRecv:  make(chan *bcast),
+					bcastRecv:  make(chan *bcast, bufSize),
 					interestIn: ch,
-					dataOut:    make(chan *ndn.Data),
+					dataOut:    make(chan *ndn.Data, bufSize),
 					closed:     closed,
 				}
 				f.log("face created")
@@ -193,6 +198,9 @@ func removeNextHop(name ndn.Name, f *Face) {
 			return nil
 		}
 		m := chs.(map[chan<- *bcast]bool)
+		if _, ok := m[f.bcastRecv]; !ok {
+			return chs
+		}
 		delete(m, f.bcastRecv)
 		if len(m) == 0 {
 			return nil

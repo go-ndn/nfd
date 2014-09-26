@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/taylorchu/exact"
 	"github.com/taylorchu/ndn"
 )
 
@@ -69,16 +70,16 @@ func (this *Face) Listen() {
 				continue
 			}
 			// check for loop
-			id := i.Name.String() + string(i.Nonce)
-			if Forwarded[id] {
-				continue
-			}
-			this.log("interest in", i.Name)
-			Forwarded[id] = true
-
-			sendPending = append(sendPending, &bcast{
-				interest: i,
-				sender:   this,
+			Forwarded.Update(exact.Key(i.Name.String()+string(i.Nonce)), func(v interface{}) interface{} {
+				if v != nil {
+					return v
+				}
+				this.log("interest in", i.Name)
+				sendPending = append(sendPending, &bcast{
+					interest: i,
+					sender:   this,
+				})
+				return true
 			})
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
@@ -91,10 +92,13 @@ func (this *Face) Listen() {
 				continue
 			}
 			recvPending = append(recvPending, b)
-		case recvFirst.data = <-recv:
+		case d, ok := <-recv:
 			recvPending = recvPending[1:]
-			if recvFirst.data != nil {
+			if ok {
+				recvFirst.data = d
 				retPending = append(retPending, recvFirst)
+			} else {
+				this.log("no data")
 			}
 		case ret <- retFirst:
 			retPending = retPending[1:]
