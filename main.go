@@ -21,6 +21,7 @@ var (
 var (
 	VerifyKey *ndn.Key
 	Forwarded = make(map[string]bool) // check for interest loop
+	Fib       = lpm.New()
 )
 
 func decodePrivateKey(file string) (err error) {
@@ -68,7 +69,6 @@ func main() {
 	create := make(chan net.Conn)
 
 	go func() {
-		activeFaces := make(map[*Face]bool)
 		bcastSend := make(chan *bcast)
 		closed := make(chan *Face)
 		for {
@@ -77,22 +77,43 @@ func main() {
 				ch := make(chan *ndn.Interest)
 				f := &Face{
 					Face:       ndn.NewFace(conn, ch),
-					fib:        lpm.New(),
-					closed:     closed,
+					nextHops:   make(map[string]bool),
 					bcastSend:  bcastSend,
 					bcastRecv:  make(chan *bcast),
 					interestIn: ch,
 					dataOut:    make(chan *ndn.Data),
+					closed:     closed,
 				}
-				activeFaces[f] = true
 				f.log("face created")
 				go f.Listen()
 			case b := <-bcastSend:
-				for f := range activeFaces {
-					f.bcastRecv <- b
+				c := new(ndn.ControlInterest)
+				err := ndn.Copy(b.interest, c)
+				if err == nil {
+					// do not forward command to other faces
+					d := &ndn.Data{
+						Name: b.interest.Name,
+					}
+					d.Content, err = ndn.Marshal(handleCommand(&c.Name, b.sender), 101)
+					if err != nil {
+						continue
+					}
+					b.sender.dataOut <- d
+					continue
 				}
+				Fib.Update(b.interest.Name, func(chs interface{}) interface{} {
+					if chs == nil {
+						return nil
+					}
+					for ch := range chs.(map[chan<- *bcast]bool) {
+						ch <- b
+					}
+					return chs
+				}, false)
 			case f := <-closed:
-				delete(activeFaces, f)
+				for nextHop := range f.nextHops {
+					removeNextHop(ndn.NewName(nextHop), f)
+				}
 				f.log("face removed")
 			}
 		}
@@ -134,4 +155,52 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	log.Println("goodbye nfd")
+}
+
+func handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
+	service := c.Module + "." + c.Command
+	f.log("_", service)
+	if VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
+		resp = RespNotAuthorized
+		return
+	}
+	resp = RespOK
+	params := c.Parameters.Parameters
+	switch service {
+	case "fib.add-nexthop":
+		addNextHop(params.Name, f)
+	case "fib.remove-nexthop":
+		removeNextHop(params.Name, f)
+	default:
+		resp = RespNotSupported
+	}
+	return
+}
+
+func addNextHop(name ndn.Name, f *Face) {
+	Fib.Update(name, func(chs interface{}) interface{} {
+		f.log("add-nexthop", name)
+		f.nextHops[name.String()] = true
+		if chs == nil {
+			return map[chan<- *bcast]bool{f.bcastRecv: true}
+		}
+		chs.(map[chan<- *bcast]bool)[f.bcastRecv] = true
+		return chs
+	}, false)
+}
+
+func removeNextHop(name ndn.Name, f *Face) {
+	Fib.Update(name, func(chs interface{}) interface{} {
+		f.log("remove-nexthop", name)
+		delete(f.nextHops, name.String())
+		if chs == nil {
+			return nil
+		}
+		m := chs.(map[chan<- *bcast]bool)
+		delete(m, f.bcastRecv)
+		if len(m) == 0 {
+			return nil
+		}
+		return chs
+	}, false)
 }

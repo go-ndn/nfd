@@ -2,14 +2,13 @@ package main
 
 import (
 	"fmt"
-	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
 )
 
 type Face struct {
 	*ndn.Face
-	fib        *lpm.Matcher
-	closed     chan<- *Face // unregister current face
+	nextHops   map[string]bool // names in fib
+	closed     chan<- *Face    // unregister current face
 	bcastSend  chan<- *bcast
 	bcastRecv  chan *bcast
 	interestIn <-chan *ndn.Interest
@@ -22,8 +21,8 @@ func (this *Face) log(i ...interface{}) {
 }
 
 type bcast struct {
-	from     chan<- *ndn.Data // direct to original face
-	to       <-chan *ndn.Data // save request after sending interest
+	sender   *Face            // original face
+	pending  <-chan *ndn.Data // save request after sending interest
 	data     *ndn.Data        // fetch data and save it
 	interest *ndn.Interest
 }
@@ -46,7 +45,7 @@ func (this *Face) Listen() {
 		var recv <-chan *ndn.Data
 		if len(recvPending) > 0 {
 			recvFirst = recvPending[0]
-			recv = recvFirst.to
+			recv = recvFirst.pending
 		}
 
 		// send data to requesting face
@@ -54,7 +53,7 @@ func (this *Face) Listen() {
 		var ret chan<- *ndn.Data
 		if len(retPending) > 0 {
 			retFirst = retPending[0].data
-			ret = retPending[0].from
+			ret = retPending[0].sender.dataOut
 		}
 
 		var closed chan<- *Face
@@ -63,26 +62,10 @@ func (this *Face) Listen() {
 		}
 		select {
 		case i, ok := <-this.interestIn:
-			this.log("interest in")
 			if !ok {
 				// this face will not accept new interest
 				this.interestIn = nil
 				this.log("face idle")
-				continue
-			}
-			c := new(ndn.ControlInterest)
-			err := ndn.Copy(i, c)
-			if err == nil {
-				// do not forward command to other faces
-				d := &ndn.Data{
-					Name: i.Name,
-				}
-				d.Content, err = ndn.Marshal(this.handleCommand(&c.Name), 101)
-				if err != nil {
-					continue
-				}
-				this.log("control response returned", d.Name)
-				this.SendData(d)
 				continue
 			}
 			// check for loop
@@ -90,21 +73,19 @@ func (this *Face) Listen() {
 			if Forwarded[id] {
 				continue
 			}
+			this.log("interest in", i.Name)
 			Forwarded[id] = true
+
 			sendPending = append(sendPending, &bcast{
 				interest: i,
-				from:     this.dataOut,
+				sender:   this,
 			})
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
 		case b := <-this.bcastRecv:
-			// interest name is the longest prefix of fib name
-			if this.fib.RMatch(b.interest.Name) == nil {
-				continue
-			}
 			this.log("interest forwarded", b.interest.Name)
 			var err error
-			b.to, err = this.SendInterest(b.interest)
+			b.pending, err = this.SendInterest(b.interest)
 			if err != nil {
 				this.log(err)
 				continue
@@ -125,28 +106,4 @@ func (this *Face) Listen() {
 			return
 		}
 	}
-}
-
-func (this *Face) handleCommand(c *ndn.Command) (resp *ndn.ControlResponse) {
-	service := c.Module + "." + c.Command
-	this.log("_", service)
-	if VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
-		resp = RespNotAuthorized
-		return
-	}
-	resp = RespOK
-	params := c.Parameters.Parameters
-	switch service {
-	case "fib.add-nexthop":
-		if params.Cost == 0 {
-			resp = RespIncorrectParams
-			return
-		}
-		this.fib.Add(params.Name, params.Cost)
-	case "fib.remove-nexthop":
-		this.fib.Remove(params.Name)
-	default:
-		resp = RespNotSupported
-	}
-	return
 }
