@@ -17,15 +17,14 @@ type Face struct {
 }
 
 func (this *Face) log(i ...interface{}) {
-	fmt.Printf("[%s] ", this.RemoteAddr())
-	fmt.Println(i...)
+	fmt.Printf("[%s] %s", this.RemoteAddr(), fmt.Sprintln(i...))
 }
 
 type bcast struct {
 	sender   *Face            // original face
-	pending  <-chan *ndn.Data // save request after sending interest
-	data     *ndn.Data        // fetch data and save it
-	interest *ndn.Interest
+	pending  <-chan *ndn.Data // save request after sending interest (channel will return a shared pointer)
+	data     ndn.Data         // data fetched from pending
+	interest ndn.Interest     // copy of original interest
 }
 
 func (this *Face) Listen() {
@@ -36,31 +35,35 @@ func (this *Face) Listen() {
 		// send interest to other face
 		var send chan<- *bcast
 		var sendFirst *bcast
-		if len(sendPending) > 0 {
-			sendFirst = sendPending[0]
-			send = this.bcastSend
-		}
 
 		// fetch data from this face
 		var recvFirst *bcast
 		var recv <-chan *ndn.Data
-		if len(recvPending) > 0 {
-			recvFirst = recvPending[0]
-			recv = recvFirst.pending
-		}
 
 		// send data to requesting face
 		var retFirst *ndn.Data
 		var ret chan<- *ndn.Data
-		if len(retPending) > 0 {
-			retFirst = retPending[0].data
-			ret = retPending[0].sender.dataOut
+
+		// shutdown
+		var closed chan<- *Face
+
+		if this.interestIn == nil {
+			closed = this.closed
+		} else {
+			if len(sendPending) > 0 {
+				sendFirst = sendPending[0]
+				send = this.bcastSend
+			}
+			if len(recvPending) > 0 {
+				recvFirst = recvPending[0]
+				recv = recvFirst.pending
+			}
+			if len(retPending) > 0 {
+				retFirst = &retPending[0].data
+				ret = retPending[0].sender.dataOut
+			}
 		}
 
-		var closed chan<- *Face
-		if len(sendPending) == 0 && len(recvPending) == 0 && len(retPending) == 0 && this.interestIn == nil {
-			closed = this.closed
-		}
 		select {
 		case i, ok := <-this.interestIn:
 			if !ok {
@@ -76,7 +79,7 @@ func (this *Face) Listen() {
 				}
 				this.log("interest in", i.Name)
 				sendPending = append(sendPending, &bcast{
-					interest: i,
+					interest: *i,
 					sender:   this,
 				})
 				return true
@@ -84,21 +87,22 @@ func (this *Face) Listen() {
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
 		case b := <-this.bcastRecv:
-			this.log("interest forwarded", b.interest.Name)
 			var err error
-			b.pending, err = this.SendInterest(b.interest)
+			b.pending, err = this.SendInterest(&b.interest)
 			if err != nil {
 				this.log(err)
 				continue
 			}
+			this.log("interest forwarded", b.interest.Name, b.sender.RemoteAddr())
 			recvPending = append(recvPending, b)
 		case d, ok := <-recv:
 			recvPending = recvPending[1:]
 			if ok {
-				recvFirst.data = d
+				// a copy must be created because this fetched data might also be given to other fetching faces
+				recvFirst.data = *d
 				retPending = append(retPending, recvFirst)
 			} else {
-				this.log("no data")
+				this.log("no data", recvFirst.sender.RemoteAddr())
 			}
 		case ret <- retFirst:
 			retPending = retPending[1:]

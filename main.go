@@ -16,7 +16,7 @@ import (
 )
 
 const (
-	bufSize = 0
+	bufSize = 32
 )
 
 var (
@@ -93,7 +93,7 @@ func main() {
 				go f.Listen()
 			case b := <-bcastSend:
 				c := new(ndn.ControlInterest)
-				err := ndn.Copy(b.interest, c)
+				err := ndn.Copy(&b.interest, c)
 				if err == nil {
 					// do not forward command to other faces
 					d := &ndn.Data{
@@ -111,7 +111,10 @@ func main() {
 					continue
 				}
 				for ch := range chs.(map[chan<- *bcast]bool) {
-					ch <- b
+					// every face gets a fresh copy of bcast job
+					// each bcast contains its own fetching pipeline, so it should not be shared
+					bcastCopy := *b
+					ch <- &bcastCopy
 				}
 			case f := <-closed:
 				for nextHop := range f.fibNames {
@@ -133,7 +136,6 @@ func main() {
 			for {
 				conn, err := ln.Accept()
 				if err != nil {
-					log.Println(err)
 					continue
 				}
 				create <- conn
@@ -146,7 +148,6 @@ func main() {
 			// retry until connection established
 			conn, err := net.Dial(u.Network, u.Address)
 			if err != nil {
-				log.Println(err)
 				continue
 			}
 			create <- conn
