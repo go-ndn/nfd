@@ -2,68 +2,96 @@ package main
 
 import (
 	"fmt"
-	"github.com/taylorchu/exact"
 	"github.com/taylorchu/ndn"
+	"sync"
 )
 
 type Face struct {
 	*ndn.Face
-	fibNames   map[string]bool // names in fib
-	closed     chan<- *Face    // unregister current face
-	bcastSend  chan<- *bcast
-	bcastRecv  chan *bcast
+	closed     chan<- *Face // remove face
+	reqSend    chan<- *req
+	reqRecv    chan *req
 	interestIn <-chan *ndn.Interest
-	dataOut    chan *ndn.Data // data that will be written to current face
 }
 
 func (this *Face) log(i ...interface{}) {
 	fmt.Printf("[%s] %s", this.RemoteAddr(), fmt.Sprintln(i...))
 }
 
-type bcast struct {
+type req struct {
 	sender   *Face            // original face
-	pending  <-chan *ndn.Data // save request after sending interest (channel will return a shared pointer)
-	data     ndn.Data         // data fetched from pending
+	data     <-chan *ndn.Data // request after other faces send interest
 	interest ndn.Interest     // copy of original interest
+	resp     chan *req
 }
 
-func (this *Face) Listen() {
-	var sendPending []*bcast
-	var recvPending []*bcast
-	var retPending []*bcast
+func merge(done <-chan interface{}, cs ...<-chan *ndn.Data) <-chan *ndn.Data {
+	var wg sync.WaitGroup
+	out := make(chan *ndn.Data)
+
+	// Start an output goroutine for each input channel in cs.  output
+	// copies values from c to out until c is closed, then calls wg.Done.
+	output := func(c <-chan *ndn.Data) {
+		defer wg.Done()
+		var sendPending []*ndn.Data
+		for {
+			var send chan<- *ndn.Data
+			var sendFirst *ndn.Data
+			if len(sendPending) > 0 {
+				send = out
+				sendFirst = sendPending[0]
+			}
+			select {
+			case d, ok := <-c:
+				if !ok {
+					return
+				}
+				sendPending = append(sendPending, d)
+			case send <- sendFirst:
+				sendPending = sendPending[1:]
+			case <-done:
+				return
+			}
+		}
+	}
+	wg.Add(len(cs))
+	for _, c := range cs {
+		go output(c)
+	}
+
+	// Start a goroutine to close out once all the output goroutines are
+	// done.  This must start after the wg.Add call.
+	go func() {
+		wg.Wait()
+		close(out)
+	}()
+	return out
+}
+
+func (this *Face) Run() {
+	// send req with queue
+	var sendPending []*req
+
+	// listen to pending receive at the same time
+	var recv <-chan *ndn.Data
+	recvDone := make(chan interface{})
 	for {
 		// send interest to other face
-		var send chan<- *bcast
-		var sendFirst *bcast
-
-		// fetch data from this face
-		var recvFirst *bcast
-		var recv <-chan *ndn.Data
-
-		// send data to requesting face
-		var retFirst *ndn.Data
-		var ret chan<- *ndn.Data
+		var send chan<- *req
+		var sendFirst *req
 
 		// shutdown
 		var closed chan<- *Face
 
 		if this.interestIn == nil {
+			// when face is closing, it will not send to other faces
 			closed = this.closed
 		} else {
 			if len(sendPending) > 0 {
 				sendFirst = sendPending[0]
-				send = this.bcastSend
-			}
-			if len(recvPending) > 0 {
-				recvFirst = recvPending[0]
-				recv = recvFirst.pending
-			}
-			if len(retPending) > 0 {
-				retFirst = &retPending[0].data
-				ret = retPending[0].sender.dataOut
+				send = this.reqSend
 			}
 		}
-
 		select {
 		case i, ok := <-this.interestIn:
 			if !ok {
@@ -72,45 +100,44 @@ func (this *Face) Listen() {
 				this.log("face idle")
 				continue
 			}
-			// check for loop
-			Forwarded.Update(exact.Key(i.Name.String()+string(i.Nonce)), func(v interface{}) interface{} {
-				if v != nil {
-					return v
-				}
-				this.log("interest in", i.Name)
-				sendPending = append(sendPending, &bcast{
-					interest: *i,
-					sender:   this,
-				})
-				return true
+			this.log("interest in", i.Name)
+			sendPending = append(sendPending, &req{
+				interest: *i,
+				sender:   this,
+				resp:     make(chan *req),
 			})
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
-		case b := <-this.bcastRecv:
-			var err error
-			b.pending, err = this.SendInterest(&b.interest)
-			if err != nil {
-				this.log(err)
+			recvPending := []<-chan *ndn.Data{recv}
+			for b := range sendFirst.resp {
+				recvPending = append(recvPending, b.data)
+			}
+			// merge and listen to more channels
+			recv = merge(recvDone, recvPending...)
+		case d, ok := <-recv:
+			if !ok {
 				continue
 			}
-			this.log("interest forwarded", b.interest.Name, b.sender.RemoteAddr())
-			recvPending = append(recvPending, b)
-		case d, ok := <-recv:
-			recvPending = recvPending[1:]
-			if ok {
-				// a copy must be created because this fetched data might also be given to other fetching faces
-				recvFirst.data = *d
-				retPending = append(retPending, recvFirst)
-			} else {
-				this.log("no data", recvFirst.sender.RemoteAddr())
+			// data is shared by other faces, so making copy is required to avoid data race
+			copy := *d
+			this.log("data returned", copy.Name)
+			this.SendData(&copy)
+		case b := <-this.reqRecv:
+			if this.interestIn == nil {
+				// listening is required even if idle, so forwarder will not block
+				close(b.resp)
+				continue
 			}
-		case ret <- retFirst:
-			retPending = retPending[1:]
-		case d := <-this.dataOut:
-			this.log("data returned", d.Name)
-			this.SendData(d)
+			var err error
+			b.data, err = this.SendInterest(&b.interest)
+			if err == nil {
+				this.log("interest forwarded", b.interest.Name, b.sender.RemoteAddr())
+				b.resp <- b
+			}
+			close(b.resp)
 		case closed <- this:
 			this.Close()
+			close(recvDone)
 			return
 		}
 	}

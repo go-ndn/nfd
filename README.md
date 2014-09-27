@@ -6,9 +6,11 @@ It is small (< 300 SLOC), and go get-able.
 
 Each face runs in its own thread, and the main thread handles communication between each faces.
 
-When a face receives an interest from remote face, it will notify the main thread, which will in turn notify other faces. If a face's rib indicates that this interest can be routed, then it will be send out to remote face; otherwise this face simply ignores. Once the data come back, only the original face will receive it because each interest notification keeps track of the original face.
+When a face receives an interest from remote face (queue), it will send a forward request to the main thread. The main thread will look up centralized rib to know a list of faces to fulfill this request, and distribute this request to them. After theses faces create request promise, this request will be returned to the originating face along via the main thread.
 
-The rib entry of each face is controlled by remote face with signed command.
+After the promises are returned, the originating face will check for all promises and write out data.
+
+The rib entry is controlled by remote face with signed command.
 
 Install
 =======
@@ -23,7 +25,7 @@ What is supported
 - [x] forwarding
 - [x] content store
 - [x] certificate
-- [x] routing
+- [ ] routing
 - [ ] ndn dns
 
 License

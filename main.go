@@ -15,18 +15,12 @@ import (
 	"syscall"
 )
 
-const (
-	bufSize = 32
-)
-
 var (
 	configPath = flag.String("c", "nfd.json", "nfd config file path")
 )
 
 var (
 	VerifyKey *ndn.Key
-	Forwarded = exact.New() // check for interest loop
-	Fib       = lpm.New()
 )
 
 func decodePrivateKey(file string) (err error) {
@@ -71,59 +65,13 @@ func main() {
 		log.Fatal(err)
 	}
 
-	create := make(chan net.Conn, bufSize)
-
-	go func() {
-		bcastSend := make(chan *bcast, bufSize)
-		closed := make(chan *Face, bufSize)
-		for {
-			select {
-			case conn := <-create:
-				ch := make(chan *ndn.Interest, bufSize)
-				f := &Face{
-					Face:       ndn.NewFace(conn, ch),
-					fibNames:   make(map[string]bool),
-					bcastSend:  bcastSend,
-					bcastRecv:  make(chan *bcast, bufSize),
-					interestIn: ch,
-					dataOut:    make(chan *ndn.Data, bufSize),
-					closed:     closed,
-				}
-				f.log("face created")
-				go f.Listen()
-			case b := <-bcastSend:
-				c := new(ndn.ControlInterest)
-				err := ndn.Copy(&b.interest, c)
-				if err == nil {
-					// do not forward command to other faces
-					d := &ndn.Data{
-						Name: b.interest.Name,
-					}
-					d.Content, err = ndn.Marshal(handleCommand(&c.Name, b.sender), 101)
-					if err != nil {
-						continue
-					}
-					b.sender.dataOut <- d
-					continue
-				}
-				chs := Fib.Match(b.interest.Name)
-				if chs == nil {
-					continue
-				}
-				for ch := range chs.(map[chan<- *bcast]bool) {
-					// every face gets a fresh copy of bcast job
-					// each bcast contains its own fetching pipeline, so it should not be shared
-					bcastCopy := *b
-					ch <- &bcastCopy
-				}
-			case f := <-closed:
-				for nextHop := range f.fibNames {
-					removeNextHop(ndn.NewName(nextHop), f)
-				}
-				f.log("face removed")
-			}
-		}
-	}()
+	createFace := make(chan net.Conn)
+	go (&Forwarder{
+		fib:        lpm.New(),
+		fibNames:   make(map[*Face]map[string]bool),
+		forwarded:  exact.New(),
+		createFace: createFace,
+	}).Run()
 
 	for _, u := range conf.LocalUrl {
 		ln, err := net.Listen(u.Network, u.Address)
@@ -138,11 +86,10 @@ func main() {
 				if err != nil {
 					continue
 				}
-				create <- conn
+				createFace <- conn
 			}
 		}()
 	}
-
 	for _, u := range conf.RemoteUrl {
 		for {
 			// retry until connection established
@@ -150,7 +97,7 @@ func main() {
 			if err != nil {
 				continue
 			}
-			create <- conn
+			createFace <- conn
 			break
 		}
 	}
@@ -159,53 +106,4 @@ func main() {
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
 	log.Println("goodbye nfd")
-}
-
-func handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
-	if VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
-		resp = RespNotAuthorized
-		return
-	}
-	resp = RespOK
-	params := c.Parameters.Parameters
-	switch c.Module + "." + c.Command {
-	case "fib.add-nexthop":
-		addNextHop(params.Name, f)
-	case "fib.remove-nexthop":
-		removeNextHop(params.Name, f)
-	default:
-		resp = RespNotSupported
-	}
-	return
-}
-
-func addNextHop(name ndn.Name, f *Face) {
-	Fib.Update(name, func(chs interface{}) interface{} {
-		f.log("add-nexthop", name)
-		f.fibNames[name.String()] = true
-		if chs == nil {
-			return map[chan<- *bcast]bool{f.bcastRecv: true}
-		}
-		chs.(map[chan<- *bcast]bool)[f.bcastRecv] = true
-		return chs
-	}, false)
-}
-
-func removeNextHop(name ndn.Name, f *Face) {
-	Fib.Update(name, func(chs interface{}) interface{} {
-		f.log("remove-nexthop", name)
-		delete(f.fibNames, name.String())
-		if chs == nil {
-			return nil
-		}
-		m := chs.(map[chan<- *bcast]bool)
-		if _, ok := m[f.bcastRecv]; !ok {
-			return chs
-		}
-		delete(m, f.bcastRecv)
-		if len(m) == 0 {
-			return nil
-		}
-		return chs
-	}, false)
 }
