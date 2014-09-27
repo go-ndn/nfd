@@ -1,16 +1,21 @@
 package main
 
 import (
+	"bufio"
+	"encoding/base64"
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
+	"io/ioutil"
 	"net"
+	"os"
 )
 
 type Forwarder struct {
 	fib        *lpm.Matcher
 	fibNames   map[*Face]map[string]bool
 	forwarded  *exact.Matcher
+	verifyKey  ndn.Key
 	createFace <-chan net.Conn
 }
 
@@ -88,8 +93,32 @@ func (this *Forwarder) handleReq(b *req) {
 	})
 }
 
+func (this *Forwarder) decodePrivateKey(file string) (err error) {
+	b, err := ioutil.ReadFile(file)
+	if err != nil {
+		return
+	}
+	err = ndn.SignKey.DecodePrivateKey(b)
+	return
+}
+
+func (this *Forwarder) decodeCertificate(file string) (err error) {
+	f, err := os.Open(file)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	var d ndn.Data
+	err = d.ReadFrom(bufio.NewReader(base64.NewDecoder(base64.StdEncoding, f)))
+	if err != nil {
+		return
+	}
+	err = this.verifyKey.DecodePublicKey(d.Content)
+	return
+}
+
 func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
-	if VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
+	if this.verifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
 		return
 	}
