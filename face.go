@@ -39,11 +39,14 @@ func merge(done <-chan interface{}, cs ...<-chan *ndn.Data) <-chan *ndn.Data {
 			if len(sendPending) > 0 {
 				send = out
 				sendFirst = sendPending[0]
+			} else if c == nil {
+				return
 			}
 			select {
 			case d, ok := <-c:
 				if !ok {
-					return
+					c = nil
+					continue
 				}
 				sendPending = append(sendPending, d)
 			case send <- sendFirst:
@@ -85,11 +88,9 @@ func (this *Face) Run() {
 		if this.interestIn == nil {
 			// when face is closing, it will not send to other faces
 			closed = this.closed
-		} else {
-			if len(sendPending) > 0 {
-				sendFirst = sendPending[0]
-				send = this.reqSend
-			}
+		} else if len(sendPending) > 0 {
+			sendFirst = sendPending[0]
+			send = this.reqSend
 		}
 		select {
 		case i, ok := <-this.interestIn:
@@ -107,7 +108,10 @@ func (this *Face) Run() {
 			})
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
-			recvPending := []<-chan *ndn.Data{recv}
+			var recvPending []<-chan *ndn.Data
+			if recv != nil {
+				recvPending = append(recvPending, recv)
+			}
 			for ch := range sendFirst.resp {
 				recvPending = append(recvPending, ch)
 			}
@@ -115,6 +119,7 @@ func (this *Face) Run() {
 			recv = merge(recvDone, recvPending...)
 		case d, ok := <-recv:
 			if !ok {
+				recv = nil
 				continue
 			}
 			// data is shared by other faces, so making copy is required to avoid data race
