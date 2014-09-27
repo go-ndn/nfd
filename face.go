@@ -19,10 +19,9 @@ func (this *Face) log(i ...interface{}) {
 }
 
 type req struct {
-	sender   *Face            // original face
-	data     <-chan *ndn.Data // request after other faces send interest
-	interest ndn.Interest     // copy of original interest
-	resp     chan *req
+	sender   *Face         // original face
+	interest *ndn.Interest // interest from original face
+	resp     chan (<-chan *ndn.Data)
 }
 
 func merge(done <-chan interface{}, cs ...<-chan *ndn.Data) <-chan *ndn.Data {
@@ -102,15 +101,15 @@ func (this *Face) Run() {
 			}
 			this.log("interest in", i.Name)
 			sendPending = append(sendPending, &req{
-				interest: *i,
+				interest: i,
 				sender:   this,
-				resp:     make(chan *req),
+				resp:     make(chan (<-chan *ndn.Data)),
 			})
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
 			recvPending := []<-chan *ndn.Data{recv}
-			for b := range sendFirst.resp {
-				recvPending = append(recvPending, b.data)
+			for ch := range sendFirst.resp {
+				recvPending = append(recvPending, ch)
 			}
 			// merge and listen to more channels
 			recv = merge(recvDone, recvPending...)
@@ -128,11 +127,12 @@ func (this *Face) Run() {
 				close(b.resp)
 				continue
 			}
-			var err error
-			b.data, err = this.SendInterest(&b.interest)
+			// interest is shared by other faces, so making copy is required to avoid data race
+			copy := *b.interest
+			ch, err := this.SendInterest(&copy)
 			if err == nil {
-				this.log("interest forwarded", b.interest.Name, b.sender.RemoteAddr())
-				b.resp <- b
+				this.log("interest forwarded", copy.Name, b.sender.RemoteAddr())
+				b.resp <- ch
 			}
 			close(b.resp)
 		case closed <- this:

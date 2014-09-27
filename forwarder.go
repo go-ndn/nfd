@@ -51,7 +51,7 @@ func (this *Forwarder) Run() {
 func (this *Forwarder) handleReq(b *req) {
 	defer close(b.resp)
 	c := new(ndn.ControlInterest)
-	err := ndn.Copy(&b.interest, c)
+	err := ndn.Copy(b.interest, c)
 	if err == nil {
 		// command, answer directly
 		d := &ndn.Data{
@@ -63,8 +63,7 @@ func (this *Forwarder) handleReq(b *req) {
 		}
 		ch := make(chan *ndn.Data, 1)
 		ch <- d
-		b.data = ch
-		b.resp <- b
+		b.resp <- ch
 		return
 	}
 	chs := this.fib.Match(b.interest.Name)
@@ -77,16 +76,15 @@ func (this *Forwarder) handleReq(b *req) {
 			return v
 		}
 		for ch := range chs.(map[chan<- *req]bool) {
-			// every face gets a copy of req to avoid data race
-			resp := make(chan *req)
+			resp := make(chan (<-chan *ndn.Data))
 			ch <- &req{
 				interest: b.interest,
 				sender:   b.sender,
 				resp:     resp,
 			}
-			reqRecv, ok := <-resp
+			r, ok := <-resp
 			if ok {
-				b.resp <- reqRecv
+				b.resp <- r
 			}
 		}
 		return true
