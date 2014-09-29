@@ -12,6 +12,10 @@ type Face struct {
 	reqSend    chan<- *req
 	reqRecv    chan *req
 	interestIn <-chan *ndn.Interest
+
+	registered map[string]bool
+	id         string
+	cost       uint64
 }
 
 func (this *Face) log(i ...interface{}) {
@@ -135,8 +139,12 @@ func (this *Face) Run() {
 			// interest is shared by other faces, so making copy is required to avoid data race
 			copy := *b.interest
 			ch, err := this.SendInterest(&copy)
+			sender := "fw"
+			if b.sender != nil {
+				sender = b.sender.RemoteAddr().String()
+			}
 			if err == nil {
-				this.log("interest forwarded", copy.Name, b.sender.RemoteAddr())
+				this.log("interest forwarded", copy.Name, sender)
 				b.resp <- ch
 			}
 			close(b.resp)

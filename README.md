@@ -25,7 +25,7 @@ What is supported
 - [x] forwarding
 - [x] content store
 - [x] certificate
-- [ ] routing
+- [x] routing (link state)
 - [ ] ndn dns
 
 License

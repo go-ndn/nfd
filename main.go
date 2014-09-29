@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
+	"github.com/taylorchu/ndn"
 	"log"
 	"net"
 	"os"
@@ -21,14 +22,15 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-
-	createFace := make(chan net.Conn)
+	log.Println("local id", conf.Id)
 
 	fw := &Forwarder{
 		fib:        lpm.New(),
-		fibNames:   make(map[*Face]map[string]bool),
 		forwarded:  exact.New(),
-		createFace: createFace,
+		faceCreate: make(chan *connInfo),
+		face:       make(map[*Face]bool),
+		id:         conf.Id,
+		rib:        map[string]*ndn.LSA{conf.Id: newLSA(conf.Id)},
 	}
 	err = fw.decodePrivateKey(conf.PrivateKeyPath)
 	if err != nil {
@@ -53,7 +55,7 @@ func main() {
 				if err != nil {
 					continue
 				}
-				createFace <- conn
+				fw.faceCreate <- &connInfo{conn: conn}
 			}
 		}()
 	}
@@ -64,7 +66,10 @@ func main() {
 			if err != nil {
 				continue
 			}
-			createFace <- conn
+			fw.faceCreate <- &connInfo{
+				conn: conn,
+				cost: u.Cost,
+			}
 			break
 		}
 	}
