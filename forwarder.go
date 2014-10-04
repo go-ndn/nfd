@@ -64,14 +64,7 @@ func (this *Forwarder) Run() {
 			this.ribUpdated = false
 		case <-floodTimer:
 			log.Println("flood lsa")
-			resp := make(chan (<-chan *ndn.Data))
-			for f := range this.face {
-				f.reqRecv <- &req{
-					interest: this.newFloodInterest(this.rib[this.id]),
-					resp:     resp,
-				}
-				<-resp
-			}
+			this.flood(this.id, nil)
 		case <-expireTimer:
 			log.Println("remove expired lsa")
 			this.removeExpiredLSA()
@@ -293,25 +286,18 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 			f.id = params.Uri
 			this.updateLSA(this.localLSA())
 		}
-		for other := range this.face {
-			if f == other {
-				continue
-			}
-			resp := make(chan (<-chan *ndn.Data))
-			other.reqRecv <- &req{
-				interest: this.newFloodInterest(&params.LSA),
-				sender:   f,
-				resp:     resp,
-			}
-			<-resp
-		}
+		this.flood(params.LSA.Id, f)
 	default:
 		resp = RespNotSupported
 	}
 	return
 }
 
-func (this *Forwarder) newFloodInterest(v *ndn.LSA) *ndn.Interest {
+func (this *Forwarder) flood(id string, sender *Face) {
+	v, ok := this.rib[id]
+	if !ok {
+		return
+	}
 	control := new(ndn.ControlInterest)
 	control.Name.Module = "lsa"
 	control.Name.Command = "flood"
@@ -319,5 +305,16 @@ func (this *Forwarder) newFloodInterest(v *ndn.LSA) *ndn.Interest {
 	control.Name.Parameters.Parameters.LSA = *v
 	i := new(ndn.Interest)
 	ndn.Copy(control, i)
-	return i
+	resp := make(chan (<-chan *ndn.Data))
+	for f := range this.face {
+		if f == sender {
+			continue
+		}
+		f.reqRecv <- &req{
+			interest: i,
+			sender:   f,
+			resp:     resp,
+		}
+		<-resp
+	}
 }
