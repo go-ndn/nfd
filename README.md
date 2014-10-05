@@ -2,7 +2,7 @@ Nfd
 ===
 This is an alternative implementation of nfd, ndn forwarding daemon.
 
-It is small (< 300 SLOC), and go get-able.
+It is small, and go get-able.
 
 Each face runs in its own thread, and the main thread handles communication between each faces.
 
@@ -10,7 +10,15 @@ When a face receives an interest from remote face (queue), it will send a forwar
 
 After the promises are returned, the originating face will check for all promises and write out data.
 
-The rib entry is controlled by remote face with signed command.
+Routing
+=======
+Nfd uses link state routing. At flood timer, nfd will broadcast LSA interest to all faces, which contains name prefixes and neighbor information. For efficiency, the neighbor information is only covered in LSA by one of the two nodes of an edge. After LSA is received, if it is floodable (not from itself and is newer), it will be inserted into rib and be broadcasted again. 
+
+Note:
+
+1. fib update will not be immediately reflected after rib is changed.
+
+2. Nfd runs dijkstra with min priority queue O(|E| + |V|log|V|).
 
 Install
 =======
