@@ -13,15 +13,15 @@ func computeNextHop(source string, state []*ndn.LSA) map[string]ndn.Neighbor {
 	// create graph from lsa dag
 	graph := make(map[string]distMap)
 	for _, v := range state {
-		dist := make(distMap)
-		for _, u := range v.Neighbor {
-			dist[u.Id] = u.Cost
+		if _, ok := graph[v.Id]; !ok {
+			graph[v.Id] = make(distMap)
 		}
-		graph[v.Id] = dist
-	}
-	for v, dist := range graph {
-		for u, cost := range dist {
-			graph[u][v] = cost
+		for _, u := range v.Neighbor {
+			graph[v.Id][u.Id] = u.Cost
+			if _, ok := graph[u.Id]; !ok {
+				graph[u.Id] = make(distMap)
+			}
+			graph[u.Id][v.Id] = u.Cost
 		}
 	}
 	// for each prefix, find a shortest neighbor to forward
