@@ -106,11 +106,11 @@ func (this *Forwarder) flood(id string, sender *Face) {
 	control.Name.Parameters.Parameters.LSA = *v
 	i := new(ndn.Interest)
 	ndn.Copy(control, i)
-	resp := make(chan (<-chan *ndn.Data))
 	for f := range this.face {
 		if f == sender {
 			continue
 		}
+		resp := make(chan (<-chan *ndn.Data))
 		f.reqRecv <- &req{
 			interest: i,
 			sender:   f,

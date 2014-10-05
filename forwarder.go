@@ -147,6 +147,7 @@ func (this *Forwarder) handleLocal(b *req) {
 	}
 	ch := make(chan *ndn.Data, 1)
 	ch <- d
+	close(ch)
 	b.resp <- ch
 }
 
