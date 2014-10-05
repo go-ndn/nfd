@@ -32,6 +32,7 @@ func (this *Forwarder) Run() {
 	closed := make(chan *Face)
 	floodTimer := time.Tick(FloodTimer)
 	expireTimer := time.Tick(ExpireTimer)
+	var nextHop <-chan map[string]ndn.Neighbor
 	for {
 		fibUpdate := make(chan interface{})
 		if this.ribUpdated {
@@ -55,9 +56,23 @@ func (this *Forwarder) Run() {
 		case b := <-reqSend:
 			this.handleReq(b)
 		case <-fibUpdate:
-			log.Println("recompute fib")
-			this.fib = this.computeNextHop()
 			this.ribUpdated = false
+			log.Println("recompute fib")
+			// copy rib
+			var state []*ndn.LSA
+			for _, v := range this.rib {
+				state = append(state, v)
+			}
+			ch := make(chan map[string]ndn.Neighbor, 1)
+			go func() {
+				ch <- computeNextHop(this.id, state)
+				close(ch)
+			}()
+			nextHop = ch
+		case b := <-nextHop:
+			nextHop = nil
+			log.Println("finish fib update")
+			this.fib = this.updateFib(b)
 		case <-floodTimer:
 			log.Println("flood lsa")
 			this.flood(this.id, nil)
@@ -66,6 +81,14 @@ func (this *Forwarder) Run() {
 			this.removeExpiredLSA()
 		case f := <-closed:
 			delete(this.face, f)
+			this.fib.Visit(func(chs interface{}) interface{} {
+				m := chs.(map[chan<- *req]bool)
+				delete(m, f.reqRecv)
+				if len(m) == 0 {
+					return nil
+				}
+				return m
+			})
 			// prefix or neighbor id removed
 			this.updateLSA(this.localLSA())
 			f.log("face removed")
@@ -83,7 +106,8 @@ func (this *Forwarder) handleReq(b *req) {
 	if chs == nil {
 		return
 	}
-	this.forwarded.Update(exact.Key(b.interest.Name.String()+string(b.interest.Nonce)), func(v interface{}) interface{} {
+	k := exact.Key(b.interest.Name.String() + string(b.interest.Nonce))
+	this.forwarded.Update(k, func(v interface{}) interface{} {
 		if v != nil {
 			// loop, ignore req
 			return v
@@ -100,6 +124,10 @@ func (this *Forwarder) handleReq(b *req) {
 				b.resp <- r
 			}
 		}
+		go func() {
+			time.Sleep(ForwardTimer)
+			this.forwarded.Remove(k)
+		}()
 		return true
 	})
 }

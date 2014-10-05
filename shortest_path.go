@@ -2,10 +2,49 @@ package main
 
 import (
 	"container/heap"
+	"github.com/taylorchu/ndn"
 	"math"
 )
 
 type distMap map[string]uint64
+
+// TODO: multipath, currently only choose the best
+func computeNextHop(source string, state []*ndn.LSA) map[string]ndn.Neighbor {
+	// create graph from lsa dag
+	graph := make(map[string]distMap)
+	for _, v := range state {
+		dist := make(distMap)
+		for _, u := range v.Neighbor {
+			dist[u.Id] = u.Cost
+		}
+		graph[v.Id] = dist
+	}
+	for v, dist := range graph {
+		for u, cost := range dist {
+			graph[u][v] = cost
+		}
+	}
+	// for each prefix, find a shortest neighbor to forward
+	shortest := make(map[string]ndn.Neighbor)
+	for n, dist := range computeMultiPath(source, graph) {
+		for _, v := range state {
+			if v.Id == source {
+				continue
+			}
+			cost := dist[v.Id]
+			for _, name := range v.Name {
+				if s, ok := shortest[name]; ok && cost >= s.Cost {
+					continue
+				}
+				shortest[name] = ndn.Neighbor{
+					Id:   n,
+					Cost: cost,
+				}
+			}
+		}
+	}
+	return shortest
+}
 
 // for each neighbor, compute distance if that face is chosen
 func computeMultiPath(source string, graph map[string]distMap) map[string]distMap {

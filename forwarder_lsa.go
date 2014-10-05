@@ -13,42 +13,7 @@ func newLSA(id string) *ndn.LSA {
 	}
 }
 
-// TODO: multipath, currently only choose the best
-func (this *Forwarder) computeNextHop() *lpm.Matcher {
-	shortest := make(map[string]ndn.Neighbor)
-	// create graph from lsa dag
-	graph := make(map[string]distMap)
-	for id, v := range this.rib {
-		dist := make(distMap)
-		for _, u := range v.Neighbor {
-			dist[u.Id] = u.Cost
-		}
-		graph[id] = dist
-	}
-	for v, dist := range graph {
-		for u, cost := range dist {
-			graph[u][v] = cost
-		}
-	}
-	// for each prefix, find a shortest neighbor to forward
-	for n, dist := range computeMultiPath(this.id, graph) {
-		// if neighbor face is chosen
-		for u, cost := range dist {
-			if u == this.id {
-				continue
-			}
-			for _, name := range this.rib[u].Name {
-				if s, ok := shortest[name]; ok && cost >= s.Cost {
-					continue
-				}
-				shortest[name] = ndn.Neighbor{
-					Id:   n,
-					Cost: cost,
-				}
-			}
-		}
-	}
-	// next fib
+func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) *lpm.Matcher {
 	fib := lpm.New()
 	update := func(name string, f *Face) {
 		fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
@@ -73,7 +38,12 @@ func (this *Forwarder) computeNextHop() *lpm.Matcher {
 	}
 	// remote prefix
 	for name, n := range shortest {
-		update(name, faceId[n.Id])
+		f, ok := faceId[n.Id]
+		if !ok {
+			// neighbor face might be removed after calculation
+			continue
+		}
+		update(name, f)
 	}
 	return fib
 }
