@@ -87,7 +87,7 @@ func newLSA(id string) *ndn.LSA {
 // TODO: multipath, currently only choose the best
 func (this *Forwarder) computeNextHop() *lpm.Matcher {
 	shortest := make(map[string]ndn.Neighbor)
-	// create graph from lsa
+	// create graph from lsa dag
 	graph := make(map[string]distMap)
 	for id, v := range this.rib {
 		dist := make(distMap)
@@ -95,6 +95,11 @@ func (this *Forwarder) computeNextHop() *lpm.Matcher {
 			dist[u.Id] = u.Cost
 		}
 		graph[id] = dist
+	}
+	for v, dist := range graph {
+		for u, cost := range dist {
+			graph[u][v] = cost
+		}
 	}
 	// for each prefix, find a shortest neighbor to forward
 	for n, dist := range computeMultiPath(this.id, graph) {
@@ -146,8 +151,9 @@ func (this *Forwarder) computeNextHop() *lpm.Matcher {
 
 func (this *Forwarder) localLSA() *ndn.LSA {
 	v := newLSA(this.id)
+	n := make(map[string]bool)
 	for f := range this.face {
-		if f.id == "" {
+		if f.id == "" || f.cost == 0 {
 			continue
 		}
 		v.Neighbor = append(v.Neighbor, ndn.Neighbor{
@@ -155,8 +161,11 @@ func (this *Forwarder) localLSA() *ndn.LSA {
 			Cost: f.cost,
 		})
 		for name := range f.registered {
-			v.Name = append(v.Name, name)
+			n[name] = true
 		}
+	}
+	for name := range n {
+		v.Name = append(v.Name, name)
 	}
 	return v
 }
@@ -282,9 +291,11 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 		f.log("lsa", params.LSA.Id, params.Uri)
 		this.updateLSA(&params.LSA)
 		if f.id != params.Uri {
-			// neighbor id learned
 			f.id = params.Uri
-			this.updateLSA(this.localLSA())
+			if f.cost != 0 {
+				// neighbor id learned
+				this.updateLSA(this.localLSA())
+			}
 		}
 		this.flood(params.LSA.Id, f)
 	default:

@@ -6,18 +6,18 @@ import (
 	"os"
 )
 
-type LocalUrl struct {
+type Url struct {
 	Network, Address string
 }
 
 type RemoteUrl struct {
-	Network, Address string
-	Cost             uint64
+	Url
+	Cost uint64
 }
 
 type Config struct {
 	Id              string
-	LocalUrl        []LocalUrl
+	LocalUrl        []Url
 	RemoteUrl       []RemoteUrl
 	CertificatePath string
 	PrivateKeyPath  string
