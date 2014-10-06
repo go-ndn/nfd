@@ -30,7 +30,7 @@ func main() {
 		faceCreate: make(chan *connInfo),
 		face:       make(map[*Face]bool),
 		id:         conf.Id,
-		rib:        map[string]*ndn.LSA{conf.Id: newLSA(conf.Id)},
+		rib:        make(map[string]*ndn.LSA),
 	}
 	err = fw.decodePrivateKey(conf.PrivateKeyPath)
 	if err != nil {

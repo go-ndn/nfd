@@ -6,13 +6,6 @@ import (
 	"time"
 )
 
-func newLSA(id string) *ndn.LSA {
-	return &ndn.LSA{
-		Id:      id,
-		Version: uint64(time.Now().UTC().UnixNano() / 1000000),
-	}
-}
-
 func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) *lpm.Matcher {
 	fib := lpm.New()
 	update := func(name string, f *Face) {
@@ -49,7 +42,10 @@ func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) *lpm.Matcher 
 }
 
 func (this *Forwarder) localLSA() *ndn.LSA {
-	v := newLSA(this.id)
+	v := &ndn.LSA{
+		Id:      this.id,
+		Version: uint64(time.Now().UTC().UnixNano() / 1000000),
+	}
 	n := make(map[string]bool)
 	for f := range this.face {
 		if f.id == "" || f.cost == 0 {
@@ -113,7 +109,7 @@ func (this *Forwarder) flood(id string, sender *Face) {
 		resp := make(chan (<-chan *ndn.Data))
 		f.reqRecv <- &req{
 			interest: i,
-			sender:   f,
+			sender:   sender,
 			resp:     resp,
 		}
 		<-resp
