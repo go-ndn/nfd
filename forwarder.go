@@ -159,11 +159,11 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 	resp = RespOK
 	params := c.Parameters.Parameters
 	switch c.Module + "/" + c.Command {
-	case "fib/add-nexthop":
+	case "rib/register":
 		f.registered[params.Name.String()] = true
 		// name added
 		this.updateLSA(this.localLSA())
-	case "fib/remove-nexthop":
+	case "rib/unregister":
 		delete(f.registered, params.Name.String())
 		// name removed
 		this.updateLSA(this.localLSA())
