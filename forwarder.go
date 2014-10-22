@@ -13,13 +13,15 @@ import (
 type Forwarder struct {
 	id         string
 	forwarded  *exact.Matcher
-	verifyKey  ndn.Key
 	faceCreate chan *connInfo
 	face       map[*Face]bool
 
 	rib        map[string]*ndn.LSA
 	fib        *lpm.Matcher
 	ribUpdated bool
+
+	verifyKey ndn.Key
+	timestamp uint64
 }
 
 type connInfo struct {
@@ -152,10 +154,11 @@ func (this *Forwarder) handleLocal(b *req) {
 }
 
 func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
-	if this.verifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
+	if c.Timestamp <= this.timestamp || this.verifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
 		return
 	}
+	this.timestamp = c.Timestamp
 	resp = RespOK
 	params := c.Parameters.Parameters
 	switch c.Module + "/" + c.Command {
