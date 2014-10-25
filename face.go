@@ -19,6 +19,9 @@ type Face struct {
 }
 
 func (this *Face) log(i ...interface{}) {
+	if !*debug {
+		return
+	}
 	fmt.Printf("[%s] %s", this.RemoteAddr(), fmt.Sprintln(i...))
 }
 
@@ -139,7 +142,7 @@ func (this *Face) Run() {
 			// interest is shared by other faces, so making copy is required to avoid data race
 			copy := *b.interest
 			ch, err := this.SendInterest(&copy)
-			sender := "fw"
+			sender := "core"
 			if b.sender != nil {
 				sender = b.sender.RemoteAddr().String()
 			}

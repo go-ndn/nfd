@@ -5,7 +5,6 @@ import (
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"log"
 	"net"
 	"os"
 	"os/signal"
@@ -13,16 +12,18 @@ import (
 )
 
 var (
-	configPath = flag.String("c", "nfd.json", "nfd config file path")
+	configPath = flag.String("config", "nfd.json", "nfd config file path")
+	debug      = flag.Bool("debug", false, "enable logging")
 )
 
 func main() {
 	flag.Parse()
 	conf, err := NewConfig(*configPath)
 	if err != nil {
-		log.Fatal(err)
+		log(err)
+		return
 	}
-	log.Println("local id", conf.Id)
+	log("local id", conf.Id)
 
 	fw := &Forwarder{
 		fib:        lpm.New(),
@@ -34,21 +35,24 @@ func main() {
 	}
 	err = fw.decodePrivateKey(conf.PrivateKeyPath)
 	if err != nil {
-		log.Fatal(err)
+		log(err)
+		return
 	}
 	err = fw.decodeCertificate(conf.CertificatePath)
 	if err != nil {
-		log.Fatal(err)
+		log(err)
+		return
 	}
 	go fw.Run()
 
 	for _, u := range conf.LocalUrl {
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
-			log.Fatal(err)
+			log(err)
+			return
 		}
 		defer ln.Close()
-		log.Println("listening", u.Network, u.Address)
+		log("listening", u.Network, u.Address)
 		go func() {
 			for {
 				conn, err := ln.Accept()
@@ -77,5 +81,5 @@ func main() {
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	<-quit
-	log.Println("goodbye nfd")
+	log("goodbye nfd")
 }

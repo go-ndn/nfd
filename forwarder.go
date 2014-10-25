@@ -1,10 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"log"
 	"net"
 	"strings"
 	"time"
@@ -27,6 +27,13 @@ type Forwarder struct {
 type connInfo struct {
 	conn net.Conn
 	cost uint64
+}
+
+func log(i ...interface{}) {
+	if !*debug {
+		return
+	}
+	fmt.Printf("[core] %s", fmt.Sprintln(i...))
 }
 
 func (this *Forwarder) Run() {
@@ -59,7 +66,7 @@ func (this *Forwarder) Run() {
 			this.handleReq(b)
 		case <-fibUpdate:
 			this.ribUpdated = false
-			log.Println("recompute fib")
+			log("recompute fib")
 			// copy rib
 			var state []*ndn.LSA
 			for _, v := range this.rib {
@@ -73,13 +80,13 @@ func (this *Forwarder) Run() {
 			nextHop = ch
 		case b := <-nextHop:
 			nextHop = nil
-			log.Println("finish fib update")
+			log("finish fib update")
 			this.fib = this.updateFib(b)
 		case <-floodTimer:
-			log.Println("flood lsa")
+			log("flood lsa")
 			this.flood(this.id, nil)
 		case <-expireTimer:
-			log.Println("remove expired lsa")
+			log("remove expired lsa")
 			this.removeExpiredLSA()
 		case f := <-closed:
 			delete(this.face, f)
