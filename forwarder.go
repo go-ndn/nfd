@@ -91,7 +91,9 @@ func (this *Forwarder) Run() {
 		case f := <-closed:
 			delete(this.face, f)
 			// prefix or neighbor id removed
-			this.updateLSA(this.localLSA())
+			if f.cost != 0 && f.id != "" || len(f.registered) != 0 {
+				this.updateLSA(this.localLSA())
+			}
 			f.log("face removed")
 		}
 	}
@@ -128,6 +130,7 @@ func (this *Forwarder) handleReq(b *req) {
 					b.resp <- r
 				}
 			}()
+			break
 		}
 		go func() {
 			time.Sleep(ForwardTimer)

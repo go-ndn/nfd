@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"github.com/davecheney/profile"
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
@@ -18,6 +19,9 @@ var (
 
 func main() {
 	flag.Parse()
+	if *debug {
+		defer profile.Start(profile.CPUProfile).Stop()
+	}
 	conf, err := NewConfig(*configPath)
 	if err != nil {
 		log(err)
