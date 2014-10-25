@@ -83,14 +83,6 @@ func (this *Forwarder) Run() {
 			this.removeExpiredLSA()
 		case f := <-closed:
 			delete(this.face, f)
-			this.fib.Visit(func(chs interface{}) interface{} {
-				m := chs.(map[chan<- *req]bool)
-				delete(m, f.reqRecv)
-				if len(m) == 0 {
-					return nil
-				}
-				return m
-			})
 			// prefix or neighbor id removed
 			this.updateLSA(this.localLSA())
 			f.log("face removed")
@@ -115,16 +107,20 @@ func (this *Forwarder) handleReq(b *req) {
 			return v
 		}
 		for ch := range chs.(map[chan<- *req]bool) {
-			resp := make(chan (<-chan *ndn.Data))
-			ch <- &req{
-				interest: b.interest,
-				sender:   b.sender,
-				resp:     resp,
-			}
-			r, ok := <-resp
-			if ok {
-				b.resp <- r
-			}
+			// dead face might still have closed channel in fib
+			func() {
+				defer func() { recover() }()
+				resp := make(chan (<-chan *ndn.Data))
+				ch <- &req{
+					interest: b.interest,
+					sender:   b.sender,
+					resp:     resp,
+				}
+				r, ok := <-resp
+				if ok {
+					b.resp <- r
+				}
+			}()
 		}
 		go func() {
 			time.Sleep(ForwardTimer)

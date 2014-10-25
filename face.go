@@ -151,6 +151,7 @@ func (this *Face) Run() {
 		case closed <- this:
 			this.Close()
 			close(recvDone)
+			close(this.reqRecv)
 			return
 		}
 	}
