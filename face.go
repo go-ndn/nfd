@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"github.com/taylorchu/ndn"
-	"sync"
 )
 
 type Face struct {
@@ -31,58 +30,12 @@ type req struct {
 	resp     chan (<-chan *ndn.Data)
 }
 
-func merge(done <-chan interface{}, cs ...<-chan *ndn.Data) <-chan *ndn.Data {
-	var wg sync.WaitGroup
-	out := make(chan *ndn.Data)
-
-	// Start an output goroutine for each input channel in cs.  output
-	// copies values from c to out until c is closed, then calls wg.Done.
-	output := func(c <-chan *ndn.Data) {
-		defer wg.Done()
-		var sendPending []*ndn.Data
-		for {
-			var send chan<- *ndn.Data
-			var sendFirst *ndn.Data
-			if len(sendPending) > 0 {
-				send = out
-				sendFirst = sendPending[0]
-			} else if c == nil {
-				return
-			}
-			select {
-			case d, ok := <-c:
-				if !ok {
-					c = nil
-					continue
-				}
-				sendPending = append(sendPending, d)
-			case send <- sendFirst:
-				sendPending = sendPending[1:]
-			case <-done:
-				return
-			}
-		}
-	}
-	wg.Add(len(cs))
-	for _, c := range cs {
-		go output(c)
-	}
-
-	// Start a goroutine to close out once all the output goroutines are
-	// done.  This must start after the wg.Add call.
-	go func() {
-		wg.Wait()
-		close(out)
-	}()
-	return out
-}
-
 func (this *Face) Run() {
 	// send req with queue
 	var sendPending []*req
 
 	// listen to pending receive at the same time
-	var recv <-chan *ndn.Data
+	recv := make(chan *ndn.Data)
 	recvDone := make(chan interface{})
 	for {
 		// send interest to other face
@@ -115,20 +68,22 @@ func (this *Face) Run() {
 			})
 		case send <- sendFirst:
 			sendPending = sendPending[1:]
-			var recvPending []<-chan *ndn.Data
-			if recv != nil {
-				recvPending = append(recvPending, recv)
-			}
 			for ch := range sendFirst.resp {
-				recvPending = append(recvPending, ch)
+				go func(ch <-chan *ndn.Data) {
+					select {
+					case d, ok := <-ch:
+						if !ok {
+							return
+						}
+						select {
+						case recv <- d:
+						case <-recvDone:
+						}
+					case <-recvDone:
+					}
+				}(ch)
 			}
-			// merge and listen to more channels
-			recv = merge(recvDone, recvPending...)
-		case d, ok := <-recv:
-			if !ok {
-				recv = nil
-				continue
-			}
+		case d := <-recv:
 			this.log("data returned", d.Name)
 			this.SendData(d)
 		case b := <-this.reqRecv:

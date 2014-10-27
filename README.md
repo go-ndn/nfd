@@ -47,8 +47,8 @@ Disclaimer: This is just a relative performance comparsion between go-nfd and nf
 N pairs of consumer and producer are directly connected to forwarder. An unique interest/data name is assigned to each pair, and both caching and logging are disabled. After all N producers register prefix, the timer starts. The timer stops as soon as all consumers receive data, which is a few MB in size. The whole experiment is conducted many times to get the average.
 
 ```
-go-nfd: 889602645 ns/op
-nfd: 1045663725 ns/op
+go-nfd: 825336930 ns/op
+nfd: 1174368692 ns/op
 ```
 
-Both have communication overhead, so go-nfd is at least ~20% faster than nfd.
+Both have communication overhead, so go-nfd is at least 40% faster than nfd on single thread.
