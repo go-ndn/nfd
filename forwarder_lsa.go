@@ -6,29 +6,46 @@ import (
 	"time"
 )
 
-func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) *lpm.Matcher {
-	fib := lpm.New()
-	update := func(name string, f *Face) {
-		fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
-			f.log("add-nexthop", name)
-			if chs == nil {
-				return map[chan<- *req]bool{f.reqRecv: true}
-			}
-			chs.(map[chan<- *req]bool)[f.reqRecv] = true
-			return chs
-		}, false)
-	}
-	// local prefix and build face id map
+func (this *Forwarder) addNextHop(name string, f *Face, local bool) {
+	f.registered[name] = local
+	this.fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
+		f.log("add-nexthop", name)
+		if chs == nil {
+			return map[chan<- *req]bool{f.reqRecv: true}
+		}
+		chs.(map[chan<- *req]bool)[f.reqRecv] = true
+		return chs
+	}, false)
+}
+
+func (this *Forwarder) removeNextHop(name string, f *Face) {
+	delete(f.registered, name)
+	this.fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
+		f.log("remove-nexthop", name)
+		m := chs.(map[chan<- *req]bool)
+		delete(m, f.reqRecv)
+		if len(m) == 0 {
+			return nil
+		}
+		return chs
+	}, false)
+}
+
+func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) {
+	// build face id map
 	faceId := make(map[string]*Face)
 	for f := range this.face {
-		for name := range f.registered {
-			update(name, f)
-		}
 		if f.id == "" {
 			continue
 		}
+		for name, local := range f.registered {
+			if !local {
+				this.removeNextHop(name, f)
+			}
+		}
 		faceId[f.id] = f
 	}
+
 	// remote prefix
 	for name, n := range shortest {
 		f, ok := faceId[n.Id]
@@ -36,9 +53,10 @@ func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) *lpm.Matcher 
 			// neighbor face might be removed after calculation
 			continue
 		}
-		update(name, f)
+		if _, ok := f.registered[name]; !ok {
+			this.addNextHop(name, f, false)
+		}
 	}
-	return fib
 }
 
 func (this *Forwarder) localLSA() *ndn.LSA {
@@ -55,8 +73,10 @@ func (this *Forwarder) localLSA() *ndn.LSA {
 			Id:   f.id,
 			Cost: f.cost,
 		})
-		for name := range f.registered {
-			n[name] = true
+		for name, local := range f.registered {
+			if local {
+				n[name] = true
+			}
 		}
 	}
 	for name := range n {
@@ -75,11 +95,6 @@ func (this *Forwarder) canFlood(v *ndn.LSA) bool {
 	return true
 }
 
-func (this *Forwarder) updateLSA(v *ndn.LSA) {
-	this.rib[v.Id] = v
-	this.ribUpdated = true
-}
-
 func (this *Forwarder) removeExpiredLSA() {
 	ver := uint64(time.Now().UTC().Add(-ExpireTimer).UnixNano() / 1000000)
 	for id, v := range this.rib {
@@ -90,16 +105,12 @@ func (this *Forwarder) removeExpiredLSA() {
 	}
 }
 
-func (this *Forwarder) flood(id string, sender *Face) {
-	v, ok := this.rib[id]
-	if !ok {
-		return
-	}
+func (this *Forwarder) flood(v *ndn.LSA, sender *Face) {
 	control := new(ndn.ControlInterest)
 	control.Name.Module = "lsa"
 	control.Name.Command = "flood"
 	control.Name.Parameters.Parameters.Uri = this.id
-	control.Name.Parameters.Parameters.LSA = *v
+	control.Name.Parameters.Parameters.LSA = v
 	i := new(ndn.Interest)
 	ndn.Copy(control, i)
 	for f := range this.face {

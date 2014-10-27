@@ -68,7 +68,7 @@ func (this *Forwarder) Run() {
 			this.ribUpdated = false
 			log("recompute fib")
 			// copy rib
-			var state []*ndn.LSA
+			state := []*ndn.LSA{this.localLSA()}
 			for _, v := range this.rib {
 				state = append(state, v)
 			}
@@ -81,18 +81,17 @@ func (this *Forwarder) Run() {
 		case b := <-nextHop:
 			nextHop = nil
 			log("finish fib update")
-			this.fib = this.updateFib(b)
+			this.updateFib(b)
 		case <-floodTimer:
 			log("flood lsa")
-			this.flood(this.id, nil)
+			this.flood(this.localLSA(), nil)
 		case <-expireTimer:
 			log("remove expired lsa")
 			this.removeExpiredLSA()
 		case f := <-closed:
 			delete(this.face, f)
-			// prefix or neighbor id removed
-			if f.cost != 0 && f.id != "" || len(f.registered) != 0 {
-				this.updateLSA(this.localLSA())
+			for name := range f.registered {
+				this.removeNextHop(name, f)
 			}
 			f.log("face removed")
 		}
@@ -116,21 +115,17 @@ func (this *Forwarder) handleReq(b *req) {
 			return v
 		}
 		for ch := range chs.(map[chan<- *req]bool) {
-			// dead face might still have closed channel in fib
-			func() {
-				defer func() { recover() }()
-				resp := make(chan (<-chan *ndn.Data))
-				ch <- &req{
-					interest: b.interest,
-					sender:   b.sender,
-					resp:     resp,
-				}
-				r, ok := <-resp
-				if ok {
-					b.resp <- r
-				}
-			}()
-			break
+			resp := make(chan (<-chan *ndn.Data))
+			ch <- &req{
+				interest: b.interest,
+				sender:   b.sender,
+				resp:     resp,
+			}
+			r, ok := <-resp
+			if ok {
+				b.resp <- r
+				break
+			}
 		}
 		go func() {
 			time.Sleep(ForwardTimer)
@@ -169,27 +164,18 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 	params := c.Parameters.Parameters
 	switch c.Module + "/" + c.Command {
 	case "rib/register":
-		f.registered[params.Name.String()] = true
-		// name added
-		this.updateLSA(this.localLSA())
+		this.addNextHop(params.Name.String(), f, true)
 	case "rib/unregister":
-		delete(f.registered, params.Name.String())
-		// name removed
-		this.updateLSA(this.localLSA())
+		this.removeNextHop(params.Name.String(), f)
 	case "lsa/flood":
-		if !this.canFlood(&params.LSA) {
+		if !this.canFlood(params.LSA) {
 			return
 		}
 		f.log("lsa", params.LSA.Id, params.Uri)
-		this.updateLSA(&params.LSA)
-		if f.id != params.Uri {
-			f.id = params.Uri
-			if f.cost != 0 {
-				// neighbor id learned
-				this.updateLSA(this.localLSA())
-			}
-		}
-		this.flood(params.LSA.Id, f)
+		this.rib[params.LSA.Id] = params.LSA
+		this.ribUpdated = true
+		f.id = params.Uri
+		this.flood(params.LSA, f)
 	default:
 		resp = RespNotSupported
 	}

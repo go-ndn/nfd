@@ -129,32 +129,27 @@ func (this *Face) Run() {
 				recv = nil
 				continue
 			}
-			// data is shared by other faces, so making copy is required to avoid data race
-			copy := *d
-			this.log("data returned", copy.Name)
-			this.SendData(&copy)
+			this.log("data returned", d.Name)
+			this.SendData(d)
 		case b := <-this.reqRecv:
 			if this.interestIn == nil {
 				// listening is required even if idle, so forwarder will not block
 				close(b.resp)
 				continue
 			}
-			// interest is shared by other faces, so making copy is required to avoid data race
-			copy := *b.interest
-			ch, err := this.SendInterest(&copy)
+			ch, err := this.SendInterest(b.interest)
 			sender := "core"
 			if b.sender != nil {
 				sender = b.sender.RemoteAddr().String()
 			}
 			if err == nil {
-				this.log("interest forwarded", copy.Name, sender)
+				this.log("interest forwarded", b.interest.Name, sender)
 				b.resp <- ch
 			}
 			close(b.resp)
 		case closed <- this:
 			this.Close()
 			close(recvDone)
-			close(this.reqRecv)
 			return
 		}
 	}
