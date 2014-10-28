@@ -46,7 +46,7 @@ func (this *minQueue) Pop() interface{} {
 	n := this.Len()
 	item := this.item[n-1]
 	delete(this.m, item.value)
-	this.item = this.item[0 : n-1]
+	this.item = this.item[:n-1]
 	return item
 }
 
