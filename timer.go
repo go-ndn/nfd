@@ -5,7 +5,8 @@ import (
 )
 
 const (
-	ExpireTimer  = 15 * time.Minute
-	FloodTimer   = time.Minute
-	ForwardTimer = time.Minute
+	ExpireTimer = 15 * time.Minute
+	FloodTimer  = time.Minute
+	LoopTimer   = time.Minute
+	FibTimer    = 2 * time.Minute
 )

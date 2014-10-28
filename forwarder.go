@@ -41,12 +41,9 @@ func (this *Forwarder) Run() {
 	closed := make(chan *Face)
 	floodTimer := time.Tick(FloodTimer)
 	expireTimer := time.Tick(ExpireTimer)
+	fibTimer := time.Tick(FibTimer)
 	var nextHop <-chan map[string]ndn.Neighbor
 	for {
-		fibUpdate := make(chan interface{})
-		if this.ribUpdated {
-			close(fibUpdate)
-		}
 		select {
 		case info := <-this.faceCreate:
 			ch := make(chan *ndn.Interest)
@@ -64,7 +61,10 @@ func (this *Forwarder) Run() {
 			go f.Run()
 		case b := <-reqSend:
 			this.handleReq(b)
-		case <-fibUpdate:
+		case <-fibTimer:
+			if !this.ribUpdated {
+				continue
+			}
 			this.ribUpdated = false
 			log("recompute fib")
 			// copy rib
@@ -128,7 +128,7 @@ func (this *Forwarder) handleReq(b *req) {
 			}
 		}
 		go func() {
-			time.Sleep(ForwardTimer)
+			time.Sleep(LoopTimer)
 			this.forwarded.Remove(k)
 		}()
 		return true
