@@ -42,13 +42,21 @@ GPL2
 
 Benchmark
 =========
-Disclaimer: This is just a relative performance comparsion between go-nfd and nfd.
+Disclaimer: This is just a relative performance comparsion between go-nfd and nfd. Caching, logging and signing are all disabled. The whole experiment is conducted many times to get the average. The data packet is a few MB in size.
 
-N pairs of consumer and producer are directly connected to forwarder. An unique interest/data name is assigned to each pair, and both caching and logging are disabled. After all N producers register prefix, the timer starts. The timer stops as soon as all consumers receive data, which is a few MB in size. The whole experiment is conducted many times to get the average.
+BurstyForward: N pairs of consumer and producer directly connect to forwarder. An unique interest/data name is assigned to each pair. After all N producers register prefix, the timer starts. The timer stops as soon as all consumers receive data in parallel.
+
+ForwardRTT: 1 consumer and 1 producer directly connect to forwarder. The timer measures the RTT of interests.
 
 ```
-go-nfd: 825336930 ns/op
-nfd: 1174368692 ns/op
+BurstyForward
+go-nfd: 39510718 ns/op
+nfd: 377484532 ns/op
+go-nfd is 9.5x faster
+
+ForwardRTT
+go-nfd: 911532 ns/op
+nfd: 5878709 ns/op
+go-nfd is 6.5x faster
 ```
 
-Both have communication overhead, so go-nfd is at least 40% faster than nfd on single thread.
