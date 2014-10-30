@@ -50,13 +50,13 @@ ForwardRTT: 1 consumer and 1 producer directly connect to forwarder. The timer m
 
 ```
 BurstyForward
-go-nfd: 39510718 ns/op
-nfd: 377484532 ns/op
-go-nfd is 9.5x faster
+go-nfd: 37018602 ns/op
+nfd: 371395840 ns/op
+go-nfd is 10x faster
 
 ForwardRTT
-go-nfd: 911532 ns/op
-nfd: 5878709 ns/op
-go-nfd is 6.5x faster
+go-nfd: 900541 ns/op
+nfd: 6351451 ns/op
+go-nfd is 7x faster
 ```
 
