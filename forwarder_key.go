@@ -28,6 +28,6 @@ func (this *Forwarder) decodeCertificate(file string) (err error) {
 	if err != nil {
 		return
 	}
-	err = this.verifyKey.DecodePublicKey(d.Content)
+	err = this.verifyKey.DecodeCertificate(d.Content)
 	return
 }
