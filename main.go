@@ -53,7 +53,7 @@ func main() {
 	}
 	go fw.Run()
 
-	for _, u := range conf.LocalUrl {
+	for _, u := range conf.Listen {
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
 			log(err)
@@ -71,7 +71,7 @@ func main() {
 			}
 		}()
 	}
-	for _, u := range conf.RemoteUrl {
+	for _, u := range conf.Remote {
 		for {
 			// retry until connection established
 			conn, err := net.Dial(u.Network, u.Address)

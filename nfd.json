@@ -1,11 +1,11 @@
 {
   "CertificatePath": "key/default.ndncert",
   "PrivateKeyPath": "key/default.pri",
-  "LocalUrl": [
+  "Listen": [
     {
       "Network": "tcp",
       "Address": ":6363"
     }
   ],
-  "RemoteUrl": []
+  "Remote": []
 }

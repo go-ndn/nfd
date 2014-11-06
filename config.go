@@ -8,17 +8,13 @@ import (
 
 type Url struct {
 	Network, Address string
-}
-
-type RemoteUrl struct {
-	Url
-	Cost uint64
+	Cost             uint64
 }
 
 type Config struct {
 	Id              string
-	LocalUrl        []Url
-	RemoteUrl       []RemoteUrl
+	Listen          []Url
+	Remote          []Url
 	CertificatePath string
 	PrivateKeyPath  string
 }
