@@ -39,10 +39,15 @@ func log(i ...interface{}) {
 func (this *Forwarder) Run() {
 	reqSend := make(chan *req)
 	closed := make(chan *Face)
-	floodTimer := time.Tick(FloodTimer)
-	expireTimer := time.Tick(ExpireTimer)
-	fibTimer := time.Tick(FibTimer)
-	var nextHop <-chan map[string]ndn.Neighbor
+	var (
+		floodTimer, expireTimer, fibTimer <-chan time.Time
+		nextHop                           <-chan map[string]ndn.Neighbor
+	)
+	if !*dummy {
+		floodTimer = time.Tick(FloodTimer)
+		expireTimer = time.Tick(ExpireTimer)
+		fibTimer = time.Tick(FibTimer)
+	}
 	for {
 		select {
 		case info := <-this.faceCreate:
@@ -165,10 +170,16 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 	switch c.Module + "/" + c.Command {
 	case "rib/register":
 		this.addNextHop(params.Name.String(), f, true)
+		if *dummy {
+			this.transferCommand(c)
+		}
 	case "rib/unregister":
 		this.removeNextHop(params.Name.String(), f)
+		if *dummy {
+			this.transferCommand(c)
+		}
 	case "lsa/flood":
-		if !this.canFlood(params.LSA) {
+		if *dummy || !this.canFlood(params.LSA) {
 			return
 		}
 		f.log("lsa", params.LSA.Id, params.Uri)

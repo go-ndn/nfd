@@ -105,6 +105,26 @@ func (this *Forwarder) removeExpiredLSA() {
 	}
 }
 
+func (this *Forwarder) transferCommand(c *ndn.Command) {
+	control := new(ndn.ControlInterest)
+	control.Name.Module = c.Module
+	control.Name.Command = c.Command
+	control.Name.Parameters = c.Parameters
+	i := new(ndn.Interest)
+	ndn.Copy(control, i)
+	for f := range this.face {
+		if f.cost == 0 {
+			continue
+		}
+		resp := make(chan (<-chan *ndn.Data))
+		f.reqRecv <- &req{
+			interest: i,
+			resp:     resp,
+		}
+		<-resp
+	}
+}
+
 func (this *Forwarder) flood(v *ndn.LSA, sender *Face) {
 	control := new(ndn.ControlInterest)
 	control.Name.Module = "lsa"

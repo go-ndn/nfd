@@ -15,6 +15,7 @@ import (
 var (
 	configPath = flag.String("config", "nfd.json", "nfd config file path")
 	debug      = flag.Bool("debug", false, "enable logging")
+	dummy      = flag.Bool("dummy", false, "disable routing and enable remote registration")
 )
 
 func main() {
@@ -27,7 +28,10 @@ func main() {
 		log(err)
 		return
 	}
-	log("local id", conf.Id)
+	log("nfd id", conf.Id)
+	if *dummy {
+		log("routing disabled")
+	}
 
 	fw := &Forwarder{
 		fib:        lpm.New(),
