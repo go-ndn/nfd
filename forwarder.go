@@ -182,7 +182,7 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 		if *dummy || !this.canFlood(params.LSA) {
 			return
 		}
-		f.log("lsa", params.LSA.Id, params.Uri)
+		f.log("flood lsa", params.LSA.Id, "from", params.Uri)
 		this.rib[params.LSA.Id] = params.LSA
 		this.ribUpdated = true
 		f.id = params.Uri

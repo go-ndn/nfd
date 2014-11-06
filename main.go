@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	configPath = flag.String("config", "nfd.json", "nfd config file path")
+	configPath = flag.String("config", "nfd.json", "config path")
 	debug      = flag.Bool("debug", false, "enable logging")
 	dummy      = flag.Bool("dummy", false, "disable routing and enable remote registration")
 )
@@ -60,7 +60,7 @@ func main() {
 			return
 		}
 		defer ln.Close()
-		log("listening", u.Network, u.Address)
+		log("listen", u.Network, u.Address)
 		go func() {
 			for {
 				conn, err := ln.Accept()

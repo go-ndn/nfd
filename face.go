@@ -60,7 +60,7 @@ func (this *Face) Run() {
 				this.log("face idle")
 				continue
 			}
-			this.log("interest in", i.Name)
+			this.log("recv interest", i.Name)
 			sendPending = append(sendPending, &req{
 				interest: i,
 				sender:   this,
@@ -84,7 +84,7 @@ func (this *Face) Run() {
 				}(ch)
 			}
 		case d := <-recv:
-			this.log("data returned", d.Name)
+			this.log("send data", d.Name)
 			this.SendData(d)
 		case b := <-this.reqRecv:
 			if this.interestIn == nil {
@@ -98,7 +98,7 @@ func (this *Face) Run() {
 				sender = b.sender.RemoteAddr().String()
 			}
 			if err == nil {
-				this.log("interest forwarded", b.interest.Name, sender)
+				this.log("forward", b.interest.Name, "from", sender)
 				b.resp <- ch
 			}
 			close(b.resp)

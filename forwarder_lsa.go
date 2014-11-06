@@ -9,7 +9,7 @@ import (
 func (this *Forwarder) addNextHop(name string, f *Face, local bool) {
 	f.registered[name] = local
 	this.fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
-		f.log("add-nexthop", name)
+		f.log("add nexthop", name)
 		if chs == nil {
 			return map[chan<- *req]bool{f.reqRecv: true}
 		}
@@ -21,7 +21,7 @@ func (this *Forwarder) addNextHop(name string, f *Face, local bool) {
 func (this *Forwarder) removeNextHop(name string, f *Face) {
 	delete(f.registered, name)
 	this.fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
-		f.log("remove-nexthop", name)
+		f.log("remove nexthop", name)
 		m := chs.(map[chan<- *req]bool)
 		delete(m, f.reqRecv)
 		if len(m) == 0 {
