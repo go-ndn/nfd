@@ -1,8 +1,6 @@
 package main
 
 import (
-	"bufio"
-	"encoding/base64"
 	"github.com/taylorchu/ndn"
 	"io/ioutil"
 	"os"
@@ -23,11 +21,6 @@ func (this *Forwarder) decodeCertificate(file string) (err error) {
 		return
 	}
 	defer f.Close()
-	var d ndn.Data
-	err = d.ReadFrom(bufio.NewReader(base64.NewDecoder(base64.StdEncoding, f)))
-	if err != nil {
-		return
-	}
-	err = this.verifyKey.DecodeCertificate(d.Content)
+	err = this.verifyKey.DecodeCertificate(f)
 	return
 }
