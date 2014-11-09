@@ -56,17 +56,7 @@ func (this *Forwarder) Run() {
 			}
 			this.ribUpdated = false
 			log("recompute fib")
-			// copy rib
-			state := []*ndn.LSA{this.createLSA()}
-			for _, v := range this.rib {
-				state = append(state, v)
-			}
-			ch := make(chan map[string]ndn.Neighbor, 1)
-			go func() {
-				ch <- computeNextHop(this.id, state)
-				close(ch)
-			}()
-			nextHop = ch
+			nextHop = this.computeNextHop()
 		case b := <-nextHop:
 			nextHop = nil
 			log("finish fib update")

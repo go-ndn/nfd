@@ -52,11 +52,10 @@ func computeMultiPath(source string, graph map[string]distMap) map[string]distMa
 	// remove other links temperarily
 	dists := graph[source]
 	for n, cost := range dists {
-		delete(graph, source)
+		graph[source] = distMap{n: cost}
 		for n := range dists {
 			delete(graph[n], source)
 		}
-		graph[source] = distMap{n: cost}
 		graph[n][source] = cost
 		shortest[n] = computeSinglePath(source, graph)
 	}

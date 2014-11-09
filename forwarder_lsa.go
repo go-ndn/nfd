@@ -31,6 +31,20 @@ func (this *Forwarder) removeNextHop(name string, f *Face) {
 	}, false)
 }
 
+func (this *Forwarder) computeNextHop() <-chan map[string]ndn.Neighbor {
+	// copy rib
+	state := []*ndn.LSA{this.createLSA()}
+	for _, v := range this.rib {
+		state = append(state, v)
+	}
+	ch := make(chan map[string]ndn.Neighbor, 1)
+	go func() {
+		ch <- computeNextHop(this.id, state)
+		close(ch)
+	}()
+	return ch
+}
+
 func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) {
 	// build face id map
 	faceId := make(map[string]*Face)
