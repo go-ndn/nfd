@@ -59,7 +59,7 @@ func (this *Forwarder) updateFib(shortest map[string]ndn.Neighbor) {
 	}
 }
 
-func (this *Forwarder) localLSA() *ndn.LSA {
+func (this *Forwarder) createLSA() *ndn.LSA {
 	v := &ndn.LSA{
 		Id:      this.id,
 		Version: uint64(time.Now().UTC().UnixNano() / 1000000),
@@ -85,7 +85,7 @@ func (this *Forwarder) localLSA() *ndn.LSA {
 	return v
 }
 
-func (this *Forwarder) canFlood(v *ndn.LSA) bool {
+func (this *Forwarder) freshLSA(v *ndn.LSA) bool {
 	if v.Id == this.id {
 		return false
 	}
@@ -105,44 +105,9 @@ func (this *Forwarder) removeExpiredLSA() {
 	}
 }
 
-func (this *Forwarder) transferCommand(c *ndn.Command) {
-	control := new(ndn.ControlInterest)
-	control.Name.Module = c.Module
-	control.Name.Command = c.Command
-	control.Name.Parameters = c.Parameters
-	i := new(ndn.Interest)
-	ndn.Copy(control, i)
-	for f := range this.face {
-		if f.cost == 0 {
-			continue
-		}
-		resp := make(chan (<-chan *ndn.Data))
-		f.reqRecv <- &req{
-			interest: i,
-			resp:     resp,
-		}
-		<-resp
-	}
-}
-
 func (this *Forwarder) flood(v *ndn.LSA, sender *Face) {
-	control := new(ndn.ControlInterest)
-	control.Name.Module = "lsa"
-	control.Name.Command = "flood"
-	control.Name.Parameters.Parameters.Uri = this.id
-	control.Name.Parameters.Parameters.LSA = v
-	i := new(ndn.Interest)
-	ndn.Copy(control, i)
-	for f := range this.face {
-		if f == sender {
-			continue
-		}
-		resp := make(chan (<-chan *ndn.Data))
-		f.reqRecv <- &req{
-			interest: i,
-			sender:   sender,
-			resp:     resp,
-		}
-		<-resp
-	}
+	this.forwardControl("lsa", "flood", &ndn.Parameters{
+		Uri: this.id,
+		LSA: v,
+	}, func(f *Face) bool { return f != sender })
 }

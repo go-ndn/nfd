@@ -1,39 +1,23 @@
 package main
 
 import (
-	"fmt"
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"net"
 	"strings"
 	"time"
 )
 
 type Forwarder struct {
 	id         string
-	forwarded  *exact.Matcher
 	faceCreate chan *connInfo
 	face       map[*Face]bool
 
+	forwarded *exact.Matcher
+	fib       *lpm.Matcher
+
 	rib        map[string]*ndn.LSA
-	fib        *lpm.Matcher
 	ribUpdated bool
-
-	verifyKey ndn.Key
-	timestamp uint64
-}
-
-type connInfo struct {
-	conn net.Conn
-	cost uint64
-}
-
-func log(i ...interface{}) {
-	if !*debug {
-		return
-	}
-	fmt.Printf("[core] %s", fmt.Sprintln(i...))
 }
 
 func (this *Forwarder) Run() {
@@ -73,7 +57,7 @@ func (this *Forwarder) Run() {
 			this.ribUpdated = false
 			log("recompute fib")
 			// copy rib
-			state := []*ndn.LSA{this.localLSA()}
+			state := []*ndn.LSA{this.createLSA()}
 			for _, v := range this.rib {
 				state = append(state, v)
 			}
@@ -89,7 +73,7 @@ func (this *Forwarder) Run() {
 			this.updateFib(b)
 		case <-floodTimer:
 			log("flood lsa")
-			this.flood(this.localLSA(), nil)
+			this.flood(this.createLSA(), nil)
 		case <-expireTimer:
 			log("remove expired lsa")
 			this.removeExpiredLSA()
@@ -116,7 +100,7 @@ func (this *Forwarder) handleReq(b *req) {
 	k := exact.Key(b.interest.Name.String() + string(b.interest.Nonce))
 	this.forwarded.Update(k, func(v interface{}) interface{} {
 		if v != nil {
-			// loop, ignore req
+			// loop detected
 			return v
 		}
 		for ch := range chs.(map[chan<- *req]bool) {
@@ -160,26 +144,26 @@ func (this *Forwarder) handleLocal(b *req) {
 }
 
 func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
-	if c.Timestamp <= this.timestamp || this.verifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
+	if c.Timestamp <= Timestamp || VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
 		resp = RespNotAuthorized
 		return
 	}
-	this.timestamp = c.Timestamp
+	Timestamp = c.Timestamp
 	resp = RespOK
 	params := c.Parameters.Parameters
 	switch c.Module + "/" + c.Command {
 	case "rib/register":
 		this.addNextHop(params.Name.String(), f, true)
 		if *dummy {
-			this.transferCommand(c)
+			this.forwardControl(c.Module, c.Command, &c.Parameters.Parameters, func(f *Face) bool { return f.cost != 0 })
 		}
 	case "rib/unregister":
 		this.removeNextHop(params.Name.String(), f)
 		if *dummy {
-			this.transferCommand(c)
+			this.forwardControl(c.Module, c.Command, &c.Parameters.Parameters, func(f *Face) bool { return f.cost != 0 })
 		}
 	case "lsa/flood":
-		if *dummy || !this.canFlood(params.LSA) {
+		if *dummy || !this.freshLSA(params.LSA) {
 			return
 		}
 		f.log("flood lsa", params.LSA.Id, "from", params.Uri)
@@ -191,4 +175,24 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 		resp = RespNotSupported
 	}
 	return
+}
+
+func (this *Forwarder) forwardControl(module, command string, params *ndn.Parameters, validate func(*Face) bool) {
+	control := new(ndn.ControlInterest)
+	control.Name.Module = module
+	control.Name.Command = command
+	control.Name.Parameters.Parameters = *params
+	i := new(ndn.Interest)
+	ndn.Copy(control, i)
+	for f := range this.face {
+		if !validate(f) {
+			continue
+		}
+		resp := make(chan (<-chan *ndn.Data))
+		f.reqRecv <- &req{
+			interest: i,
+			resp:     resp,
+		}
+		<-resp
+	}
 }

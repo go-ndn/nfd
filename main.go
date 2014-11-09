@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"github.com/davecheney/profile"
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
@@ -17,6 +18,18 @@ var (
 	debug      = flag.Bool("debug", false, "enable logging")
 	dummy      = flag.Bool("dummy", false, "disable routing and enable remote registration")
 )
+
+type connInfo struct {
+	conn net.Conn
+	cost uint64
+}
+
+func log(i ...interface{}) {
+	if !*debug {
+		return
+	}
+	fmt.Printf("[core] %s", fmt.Sprintln(i...))
+}
 
 func main() {
 	flag.Parse()
@@ -41,12 +54,12 @@ func main() {
 		id:         conf.Id,
 		rib:        make(map[string]*ndn.LSA),
 	}
-	err = fw.decodePrivateKey(conf.PrivateKeyPath)
+	err = DecodePrivateKey(conf.PrivateKeyPath)
 	if err != nil {
 		log(err)
 		return
 	}
-	err = fw.decodeCertificate(conf.CertificatePath)
+	err = DecodeCertificate(conf.CertificatePath)
 	if err != nil {
 		log(err)
 		return
