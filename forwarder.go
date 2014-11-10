@@ -93,14 +93,14 @@ func (this *Forwarder) handleReq(b *req) {
 			// loop detected
 			return v
 		}
+		rq := &req{
+			interest: b.interest,
+			sender:   b.sender,
+		}
 		for ch := range chs.(map[chan<- *req]bool) {
-			resp := make(chan (<-chan *ndn.Data))
-			ch <- &req{
-				interest: b.interest,
-				sender:   b.sender,
-				resp:     resp,
-			}
-			r, ok := <-resp
+			rq.resp = make(chan (<-chan *ndn.Data))
+			ch <- rq
+			r, ok := <-rq.resp
 			if ok {
 				b.resp <- r
 				break
@@ -115,15 +115,13 @@ func (this *Forwarder) handleReq(b *req) {
 }
 
 func (this *Forwarder) handleLocal(b *req) {
-	d := &ndn.Data{
-		Name: b.interest.Name,
-	}
-	c := new(ndn.ControlInterest)
-	err := ndn.Copy(b.interest, c)
+	control := new(ndn.ControlInterest)
+	err := ndn.Copy(b.interest, control)
 	if err != nil {
 		return
 	}
-	d.Content, err = ndn.Marshal(this.handleCommand(&c.Name, b.sender), 101)
+	d := &ndn.Data{Name: b.interest.Name}
+	d.Content, err = ndn.Marshal(this.handleCommand(&control.Name, b.sender), 101)
 	if err != nil {
 		return
 	}
@@ -174,15 +172,13 @@ func (this *Forwarder) forwardControl(module, command string, params *ndn.Parame
 	control.Name.Parameters.Parameters = *params
 	i := new(ndn.Interest)
 	ndn.Copy(control, i)
+	rq := &req{interest: i}
 	for f := range this.face {
 		if !validate(f) {
 			continue
 		}
-		resp := make(chan (<-chan *ndn.Data))
-		f.reqRecv <- &req{
-			interest: i,
-			resp:     resp,
-		}
-		<-resp
+		rq.resp = make(chan (<-chan *ndn.Data))
+		f.reqRecv <- rq
+		<-rq.resp
 	}
 }
