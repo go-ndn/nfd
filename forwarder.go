@@ -55,8 +55,8 @@ func (this *Forwarder) Run() {
 				continue
 			}
 			this.ribUpdated = false
-			log("recompute fib")
-			nextHop = this.computeNextHop()
+			log("compute best route")
+			nextHop = this.bestRoute()
 		case b := <-nextHop:
 			nextHop = nil
 			log("finish fib update")

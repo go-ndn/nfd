@@ -31,7 +31,7 @@ func (this *Forwarder) removeNextHop(name string, f *Face) {
 	}, false)
 }
 
-func (this *Forwarder) computeNextHop() <-chan map[string]ndn.Neighbor {
+func (this *Forwarder) bestRoute() <-chan map[string]ndn.Neighbor {
 	// copy rib
 	state := []*ndn.LSA{this.createLSA()}
 	for _, v := range this.rib {
@@ -39,7 +39,7 @@ func (this *Forwarder) computeNextHop() <-chan map[string]ndn.Neighbor {
 	}
 	ch := make(chan map[string]ndn.Neighbor, 1)
 	go func() {
-		ch <- computeNextHop(this.id, state)
+		ch <- bestRouteByName(this.id, state)
 		close(ch)
 	}()
 	return ch
