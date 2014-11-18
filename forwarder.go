@@ -151,7 +151,7 @@ func (this *Forwarder) handleCommand(c *ndn.Command, f *Face) (resp *ndn.Control
 			this.forwardControl(c.Module, c.Command, &c.Parameters.Parameters, func(f *Face) bool { return f.cost != 0 })
 		}
 	case "lsa/flood":
-		if *dummy || !this.freshLSA(params.LSA) {
+		if *dummy || !this.isFreshLSA(params.LSA) {
 			return
 		}
 		f.log("flood lsa", params.LSA.Id, "from", params.Uri)

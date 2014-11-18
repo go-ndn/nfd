@@ -80,13 +80,12 @@ func (this *Forwarder) createLSA() *ndn.LSA {
 	}
 	n := make(map[string]bool)
 	for f := range this.face {
-		if f.id == "" || f.cost == 0 {
-			continue
+		if f.id != "" && f.cost != 0 {
+			v.Neighbor = append(v.Neighbor, ndn.Neighbor{
+				Id:   f.id,
+				Cost: f.cost,
+			})
 		}
-		v.Neighbor = append(v.Neighbor, ndn.Neighbor{
-			Id:   f.id,
-			Cost: f.cost,
-		})
 		for name, local := range f.registered {
 			if local {
 				n[name] = true
@@ -99,7 +98,7 @@ func (this *Forwarder) createLSA() *ndn.LSA {
 	return v
 }
 
-func (this *Forwarder) freshLSA(v *ndn.LSA) bool {
+func (this *Forwarder) isFreshLSA(v *ndn.LSA) bool {
 	if v.Id == this.id {
 		return false
 	}
