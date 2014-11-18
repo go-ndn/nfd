@@ -6,7 +6,7 @@ import (
 	"github.com/taylorchu/ndn"
 )
 
-func bestRouteByName(source string, state []*ndn.LSA) map[string]ndn.Neighbor {
+func bestRouteByName(state []*ndn.LSA, source string) map[string]ndn.Neighbor {
 	// create graph from lsa dag
 	g := graph.New()
 	for _, v := range state {

@@ -39,7 +39,7 @@ func (this *Forwarder) bestRoute() <-chan map[string]ndn.Neighbor {
 	}
 	ch := make(chan map[string]ndn.Neighbor, 1)
 	go func() {
-		ch <- bestRouteByName(this.id, state)
+		ch <- bestRouteByName(state, this.id)
 		close(ch)
 	}()
 	return ch
@@ -112,7 +112,7 @@ func (this *Forwarder) freshLSA(v *ndn.LSA) bool {
 func (this *Forwarder) removeExpiredLSA() {
 	ver := uint64(time.Now().UTC().Add(-ExpireTimer).UnixNano() / 1000000)
 	for id, v := range this.rib {
-		if v.Version < ver && v.Id != this.id {
+		if v.Version < ver {
 			this.ribUpdated = true
 			delete(this.rib, id)
 		}
