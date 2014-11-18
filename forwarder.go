@@ -93,14 +93,14 @@ func (this *Forwarder) handleReq(b *req) {
 			// loop detected
 			return v
 		}
-		rq := &req{
-			interest: b.interest,
-			sender:   b.sender,
-		}
 		for ch := range chs.(map[chan<- *req]bool) {
-			rq.resp = make(chan (<-chan *ndn.Data))
-			ch <- rq
-			r, ok := <-rq.resp
+			resp := make(chan (<-chan *ndn.Data))
+			ch <- &req{
+				interest: b.interest,
+				sender:   b.sender,
+				resp:     resp,
+			}
+			r, ok := <-resp
 			if ok {
 				b.resp <- r
 				break
@@ -172,13 +172,15 @@ func (this *Forwarder) forwardControl(module, command string, params *ndn.Parame
 	control.Name.Parameters.Parameters = *params
 	i := new(ndn.Interest)
 	ndn.Copy(control, i)
-	rq := &req{interest: i}
 	for f := range this.face {
 		if !validate(f) {
 			continue
 		}
-		rq.resp = make(chan (<-chan *ndn.Data))
-		f.reqRecv <- rq
-		<-rq.resp
+		resp := make(chan (<-chan *ndn.Data))
+		f.reqRecv <- &req{
+			interest: i,
+			resp:     resp,
+		}
+		<-resp
 	}
 }
