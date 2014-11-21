@@ -36,7 +36,7 @@ func bestRouteByName(state []*ndn.LSA, source string) map[string]ndn.Neighbor {
 func bestRoute(g graph.Graph, source graph.Vertex) map[graph.Vertex]ndn.Neighbor {
 	route := make(map[graph.Vertex]ndn.Neighbor)
 	// remove other links temperarily
-	costs := g.GetEdges(source)
+	costs := g.Edges(source)
 	for n, cost := range costs {
 		g.RemoveVertex(source)
 		g.AddUndirected(source, n, cost)
