@@ -59,13 +59,13 @@ func main() {
 		log(err)
 		return
 	}
-	log("signKey", ndn.SignKey.Name, ndn.SignKey.CertificateName)
+	log("signKey", ndn.SignKey.Name)
 	err = DecodeCertificate(conf.CertificatePath)
 	if err != nil {
 		log(err)
 		return
 	}
-	log("verifyKey", VerifyKey.Name, VerifyKey.CertificateName)
+	log("verifyKey", VerifyKey.Name)
 	go fw.Run()
 
 	for _, u := range conf.Listen {
