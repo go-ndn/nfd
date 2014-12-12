@@ -1,9 +1,10 @@
 package main
 
 import (
+	"time"
+
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"time"
 )
 
 func (this *Forwarder) addNextHop(name string, f *Face, local bool) {

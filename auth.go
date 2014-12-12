@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/taylorchu/ndn"
 	"io/ioutil"
 	"os"
+
+	"github.com/taylorchu/ndn"
 )
 
 var (

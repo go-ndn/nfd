@@ -1,9 +1,10 @@
 package main
 
 import (
-	"code.google.com/p/go-uuid/uuid"
 	"encoding/json"
 	"os"
+
+	"code.google.com/p/go-uuid/uuid"
 )
 
 type Url struct {

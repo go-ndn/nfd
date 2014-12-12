@@ -1,11 +1,12 @@
 package main
 
 import (
+	"strings"
+	"time"
+
 	"github.com/taylorchu/exact"
 	"github.com/taylorchu/lpm"
 	"github.com/taylorchu/ndn"
-	"strings"
-	"time"
 )
 
 type Forwarder struct {

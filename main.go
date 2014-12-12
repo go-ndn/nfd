@@ -35,10 +35,10 @@ func log(i ...interface{}) {
 
 func main() {
 	flag.Parse()
-	if *debug {
-		log("http://localhost:6060/debug/pprof/")
-		go http.ListenAndServe(":6060", nil)
-	}
+	// pprof
+	log("http://localhost:6060/debug/pprof/")
+	go http.ListenAndServe(":6060", nil)
+
 	conf, err := NewConfig(*configPath)
 	if err != nil {
 		log(err)
