@@ -3,14 +3,16 @@ package main
 import (
 	"flag"
 	"fmt"
-	"github.com/davecheney/profile"
-	"github.com/taylorchu/exact"
-	"github.com/taylorchu/lpm"
-	"github.com/taylorchu/ndn"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/taylorchu/exact"
+	"github.com/taylorchu/lpm"
+	"github.com/taylorchu/ndn"
 )
 
 var (
@@ -34,7 +36,8 @@ func log(i ...interface{}) {
 func main() {
 	flag.Parse()
 	if *debug {
-		defer profile.Start(profile.CPUProfile).Stop()
+		log("http://localhost:6060/debug/pprof/")
+		go http.ListenAndServe(":6060", nil)
 	}
 	conf, err := NewConfig(*configPath)
 	if err != nil {
