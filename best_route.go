@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/taylorchu/ga"
-	"github.com/taylorchu/graph"
+	"github.com/go-ndn/nfd/ga"
+	"github.com/go-ndn/nfd/graph"
 	"github.com/taylorchu/ndn"
 )
 
