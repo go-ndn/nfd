@@ -1,8 +1,9 @@
 package ga
 
 import (
-	"github.com/taylorchu/graph"
 	"testing"
+
+	"github.com/go-ndn/nfd/graph"
 )
 
 func TestShortestPath(t *testing.T) {
