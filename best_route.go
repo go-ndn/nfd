@@ -1,9 +1,9 @@
 package main
 
 import (
+	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/nfd/ga"
 	"github.com/go-ndn/nfd/graph"
-	"github.com/taylorchu/ndn"
 )
 
 func bestRouteByName(state []*ndn.LSA, source string) map[string]ndn.Neighbor {

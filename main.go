@@ -10,9 +10,9 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/taylorchu/exact"
-	"github.com/taylorchu/lpm"
-	"github.com/taylorchu/ndn"
+	"github.com/go-ndn/exact"
+	"github.com/go-ndn/lpm"
+	"github.com/go-ndn/ndn"
 )
 
 var (

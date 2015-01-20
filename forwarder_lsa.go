@@ -3,8 +3,8 @@ package main
 import (
 	"time"
 
-	"github.com/taylorchu/lpm"
-	"github.com/taylorchu/ndn"
+	"github.com/go-ndn/lpm"
+	"github.com/go-ndn/ndn"
 )
 
 func (this *Forwarder) addNextHop(name string, f *Face, local bool) {

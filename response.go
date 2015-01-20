@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/taylorchu/ndn"
+	"github.com/go-ndn/ndn"
 )
 
 var (

@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 
-	"github.com/taylorchu/ndn"
+	"github.com/go-ndn/ndn"
 )
 
 type Face struct {
