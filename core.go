@@ -19,8 +19,9 @@ var (
 	Id    = uuid.New()
 	Faces = make(map[*Face]bool)
 
-	ReqSend   = make(chan *req)
-	FaceClose = make(chan *Face)
+	FaceCreate = make(chan *connReq)
+	ReqSend    = make(chan *req)
+	FaceClose  = make(chan *Face)
 
 	Forwarded = exact.New()
 	Fib       = lpm.New()
@@ -34,6 +35,11 @@ func log(i ...interface{}) {
 		return
 	}
 	fmt.Printf("[core] %s", fmt.Sprintln(i...))
+}
+
+type connReq struct {
+	conn net.Conn
+	cost uint64
 }
 
 func Run() {
@@ -51,6 +57,8 @@ func Run() {
 
 	for {
 		select {
+		case b := <-FaceCreate:
+			CreateFace(b)
 		case b := <-ReqSend:
 			HandleReq(b)
 		case <-fibUpdateTimer:
@@ -79,14 +87,14 @@ func Run() {
 	}
 }
 
-func CreateFace(conn net.Conn, cost uint64) {
+func CreateFace(b *connReq) {
 	ch := make(chan *ndn.Interest)
 	f := &Face{
-		Face:         ndn.NewFace(conn, ch),
+		Face:         ndn.NewFace(b.conn, ch),
 		reqRecv:      make(chan *req),
 		interestRecv: ch,
 		registered:   make(map[string]bool),
-		cost:         cost,
+		cost:         b.cost,
 	}
 	Faces[f] = true
 	f.log("face created")

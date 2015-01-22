@@ -65,7 +65,7 @@ func main() {
 				if err != nil {
 					continue
 				}
-				CreateFace(conn, 0)
+				FaceCreate <- &connReq{conn: conn}
 			}
 		}()
 	}
@@ -76,7 +76,7 @@ func main() {
 			if err != nil {
 				continue
 			}
-			CreateFace(conn, u.Cost)
+			FaceCreate <- &connReq{conn: conn, cost: u.Cost}
 			break
 		}
 	}
