@@ -8,14 +8,12 @@ import (
 
 type Face struct {
 	*ndn.Face
-	closed     chan<- *Face // remove face
-	reqSend    chan<- *req
-	reqRecv    chan *req
-	interestIn <-chan *ndn.Interest
+	reqRecv      chan *req            // recv req from core
+	interestRecv <-chan *ndn.Interest // recv interest from remote
 
-	registered map[string]bool
-	id         string
-	cost       uint64
+	registered map[string]bool // true if prefix is registered directly
+	id         string          // id != "" if face runs routing protocol
+	cost       uint64          // cost != 0 if core initiates connection
 }
 
 func (this *Face) log(i ...interface{}) {
@@ -26,9 +24,9 @@ func (this *Face) log(i ...interface{}) {
 }
 
 type req struct {
-	sender   *Face         // original face
-	interest *ndn.Interest // interest from original face
-	resp     chan (<-chan *ndn.Data)
+	sender   *Face
+	interest *ndn.Interest
+	resp     chan (<-chan *ndn.Data) // recv resp from core
 }
 
 func (this *Face) Run() {
@@ -37,34 +35,35 @@ func (this *Face) Run() {
 
 	// listen to pending receive at the same time
 	recv := make(chan *ndn.Data)
-	recvDone := make(chan interface{})
+	recvDone := make(chan struct{})
+
 	for {
 		// send interest to other face
 		var send chan<- *req
 		var sendFirst *req
 
 		// shutdown
-		var closed chan<- *Face
+		var faceClose chan<- *Face
 
-		if this.interestIn == nil {
+		if this.interestRecv == nil {
 			// when face is closing, it will not send to other faces
-			closed = this.closed
+			faceClose = FaceClose
 		} else if len(sendPending) > 0 {
 			sendFirst = sendPending[0]
-			send = this.reqSend
+			send = ReqSend
 		}
 		select {
-		case i, ok := <-this.interestIn:
+		case i, ok := <-this.interestRecv:
 			if !ok {
 				// this face will not accept new interest
-				this.interestIn = nil
+				this.interestRecv = nil
 				this.log("face idle")
 				continue
 			}
 			this.log("recv interest", i.Name)
 			sendPending = append(sendPending, &req{
-				interest: i,
 				sender:   this,
+				interest: i,
 				resp:     make(chan (<-chan *ndn.Data)),
 			})
 		case send <- sendFirst:
@@ -88,22 +87,19 @@ func (this *Face) Run() {
 			this.log("send data", d.Name)
 			this.SendData(d)
 		case b := <-this.reqRecv:
-			if this.interestIn == nil {
-				// listening is required even if idle, so forwarder will not block
-				close(b.resp)
-				continue
-			}
-			ch, err := this.SendInterest(b.interest)
-			sender := "core"
-			if b.sender != nil {
-				sender = b.sender.RemoteAddr().String()
-			}
-			if err == nil {
-				this.log("forward", b.interest.Name, "from", sender)
-				b.resp <- ch
+			if this.interestRecv != nil {
+				ch, err := this.SendInterest(b.interest)
+				if err == nil {
+					sender := "core"
+					if b.sender != nil {
+						sender = b.sender.RemoteAddr().String()
+					}
+					this.log("forward", b.interest.Name, "from", sender)
+					b.resp <- ch
+				}
 			}
 			close(b.resp)
-		case closed <- this:
+		case faceClose <- this:
 			this.Close()
 			close(recvDone)
 			return

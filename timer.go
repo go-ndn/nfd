@@ -5,8 +5,8 @@ import (
 )
 
 const (
-	ExpireTimer = 15 * time.Minute
-	FloodTimer  = time.Minute
-	LoopTimer   = time.Minute
-	FibTimer    = 2 * time.Minute
+	LSAExpireIntv  = 15 * time.Minute
+	LSAFloodIntv   = time.Minute
+	LoopDetectIntv = time.Minute
+	FibUpdateIntv  = 2 * time.Minute
 )

@@ -3,8 +3,6 @@ package main
 import (
 	"encoding/json"
 	"os"
-
-	"code.google.com/p/go-uuid/uuid"
 )
 
 type Url struct {
@@ -29,11 +27,5 @@ func NewConfig(file string) (c *Config, err error) {
 	dec := json.NewDecoder(f)
 	c = new(Config)
 	err = dec.Decode(c)
-	if err != nil {
-		return
-	}
-	if c.Id == "" {
-		c.Id = uuid.New()
-	}
 	return
 }

@@ -2,16 +2,10 @@ package main
 
 import (
 	"flag"
-	"fmt"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
-	"os/signal"
-	"syscall"
 
-	"github.com/go-ndn/exact"
-	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/ndn"
 )
 
@@ -21,42 +15,28 @@ var (
 	dummy      = flag.Bool("dummy", false, "disable routing and enable remote registration")
 )
 
-type connInfo struct {
-	conn net.Conn
-	cost uint64
-}
-
-func log(i ...interface{}) {
-	if !*debug {
-		return
-	}
-	fmt.Printf("[core] %s", fmt.Sprintln(i...))
-}
-
 func main() {
 	flag.Parse()
+
 	// pprof
 	log("http://localhost:6060/debug/pprof/")
 	go http.ListenAndServe(":6060", nil)
 
+	// config
 	conf, err := NewConfig(*configPath)
 	if err != nil {
 		log(err)
 		return
 	}
-	log("nfd id", conf.Id)
+	if conf.Id != "" {
+		Id = conf.Id
+	}
+	log("nfd id", Id)
 	if *dummy {
 		log("routing disabled")
 	}
 
-	fw := &Forwarder{
-		fib:        lpm.New(),
-		forwarded:  exact.New(),
-		faceCreate: make(chan *connInfo),
-		face:       make(map[*Face]bool),
-		id:         conf.Id,
-		rib:        make(map[string]*ndn.LSA),
-	}
+	// key
 	err = DecodePrivateKey(conf.PrivateKeyPath)
 	if err != nil {
 		log(err)
@@ -69,8 +49,8 @@ func main() {
 		return
 	}
 	log("verifyKey", VerifyKey.Name)
-	go fw.Run()
 
+	// create faces
 	for _, u := range conf.Listen {
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
@@ -85,7 +65,7 @@ func main() {
 				if err != nil {
 					continue
 				}
-				fw.faceCreate <- &connInfo{conn: conn}
+				CreateFace(conn, 0)
 			}
 		}()
 	}
@@ -96,16 +76,11 @@ func main() {
 			if err != nil {
 				continue
 			}
-			fw.faceCreate <- &connInfo{
-				conn: conn,
-				cost: u.Cost,
-			}
+			CreateFace(conn, u.Cost)
 			break
 		}
 	}
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	<-quit
-	log("goodbye nfd")
+	// main loop
+	Run()
 }
