@@ -17,7 +17,7 @@ import (
 
 var (
 	Id    = uuid.New()
-	Faces = make(map[*Face]bool)
+	Faces = make(map[*Face]struct{})
 
 	FaceCreate = make(chan *connReq)
 	ReqSend    = make(chan *req)
@@ -96,7 +96,7 @@ func CreateFace(b *connReq) {
 		registered:   make(map[string]bool),
 		cost:         b.cost,
 	}
-	Faces[f] = true
+	Faces[f] = struct{}{}
 	f.log("face created")
 	go f.Run()
 }
@@ -117,7 +117,7 @@ func HandleReq(b *req) {
 			b.sender.log("loop detected", k)
 			return v
 		}
-		for ch := range chs.(map[chan<- *req]bool) {
+		for ch := range chs.(map[chan<- *req]struct{}) {
 			resp := make(chan (<-chan *ndn.Data))
 			ch <- &req{
 				interest: b.interest,
@@ -134,7 +134,7 @@ func HandleReq(b *req) {
 			time.Sleep(LoopDetectIntv)
 			Forwarded.Remove(k)
 		}()
-		return true
+		return struct{}{}
 	})
 }
 

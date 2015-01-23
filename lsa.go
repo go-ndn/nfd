@@ -11,11 +11,14 @@ func AddNextHop(name string, f *Face, local bool) {
 	Fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
 		f.log("add nexthop", name)
 		f.registered[name] = local
+		var m map[chan<- *req]struct{}
 		if chs == nil {
-			return map[chan<- *req]bool{f.reqRecv: true}
+			m = make(map[chan<- *req]struct{})
+		} else {
+			m = chs.(map[chan<- *req]struct{})
 		}
-		chs.(map[chan<- *req]bool)[f.reqRecv] = true
-		return chs
+		m[f.reqRecv] = struct{}{}
+		return m
 	}, false)
 }
 
@@ -23,12 +26,15 @@ func RemoveNextHop(name string, f *Face) {
 	Fib.Update(lpm.Key(name), func(chs interface{}) interface{} {
 		f.log("remove nexthop", name)
 		delete(f.registered, name)
-		m := chs.(map[chan<- *req]bool)
+		if chs == nil {
+			return nil
+		}
+		m := chs.(map[chan<- *req]struct{})
 		delete(m, f.reqRecv)
 		if len(m) == 0 {
 			return nil
 		}
-		return chs
+		return m
 	}, false)
 }
 
@@ -70,7 +76,7 @@ func CreateLSA() *ndn.LSA {
 		Id:      Id,
 		Version: uint64(time.Now().UTC().UnixNano() / 1000000),
 	}
-	n := make(map[string]bool)
+	n := make(map[string]struct{})
 	for f := range Faces {
 		if f.id != "" && f.cost != 0 {
 			lsa.Neighbor = append(lsa.Neighbor, ndn.Neighbor{
@@ -80,7 +86,7 @@ func CreateLSA() *ndn.LSA {
 		}
 		for name, local := range f.registered {
 			if local {
-				n[name] = true
+				n[name] = struct{}{}
 			}
 		}
 	}

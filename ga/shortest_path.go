@@ -11,7 +11,7 @@ import (
 // dijkstra with priority queue. distance is strictly positive.
 func ShortestPath(g graph.Graph, s graph.Vertex) map[graph.Vertex]uint64 {
 	dist := map[graph.Vertex]uint64{s: 0}
-	scanned := make(map[graph.Vertex]bool)
+	scanned := make(map[graph.Vertex]struct{})
 	q := pq.New()
 	for _, v := range g.Vertices() {
 		if v != s {
@@ -25,9 +25,9 @@ func ShortestPath(g graph.Graph, s graph.Vertex) map[graph.Vertex]uint64 {
 	heap.Init(q)
 	for q.Len() > 0 {
 		u := heap.Pop(q).(*pq.Item).Value
-		scanned[u] = true
+		scanned[u] = struct{}{}
 		for v, d := range g.Edges(u) {
-			if scanned[v] {
+			if _, ok := scanned[v]; ok {
 				continue
 			}
 			alt := dist[u] + d.(uint64)
