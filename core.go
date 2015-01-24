@@ -139,13 +139,13 @@ func HandleReq(b *req) {
 }
 
 func HandleLocal(b *req) {
-	control := new(ndn.ControlInterest)
-	err := ndn.Copy(b.interest, control)
+	c := new(ndn.Command)
+	err := ndn.Copy(&b.interest.Name, c)
 	if err != nil {
 		return
 	}
 	d := &ndn.Data{Name: b.interest.Name}
-	d.Content, err = ndn.Marshal(HandleCommand(&control.Name, b.sender), 101)
+	d.Content, err = ndn.Marshal(HandleCommand(c, b.sender), 101)
 	if err != nil {
 		return
 	}
@@ -190,12 +190,12 @@ func HandleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
 }
 
 func SendControl(module, command string, params *ndn.Parameters, validate func(*Face) bool) {
-	control := new(ndn.ControlInterest)
-	control.Name.Module = module
-	control.Name.Command = command
-	control.Name.Parameters.Parameters = *params
+	c := new(ndn.Command)
+	c.Module = module
+	c.Command = command
+	c.Parameters.Parameters = *params
 	i := new(ndn.Interest)
-	ndn.Copy(control, i)
+	ndn.Copy(c, &i.Name)
 	for f := range Faces {
 		if !validate(f) {
 			continue
