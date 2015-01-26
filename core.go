@@ -43,6 +43,7 @@ type connReq struct {
 }
 
 func Run() {
+	log("start")
 	var (
 		lsaFloodTimer, lsaExpireTimer, fibUpdateTimer <-chan time.Time
 	)

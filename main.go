@@ -70,15 +70,17 @@ func main() {
 		}()
 	}
 	for _, u := range conf.Remote {
-		for {
-			// retry until connection established
-			conn, err := net.Dial(u.Network, u.Address)
-			if err != nil {
-				continue
+		go func(u Url) {
+			for {
+				// retry until connection established
+				conn, err := net.Dial(u.Network, u.Address)
+				if err != nil {
+					continue
+				}
+				FaceCreate <- &connReq{conn: conn, cost: u.Cost}
+				break
 			}
-			FaceCreate <- &connReq{conn: conn, cost: u.Cost}
-			break
-		}
+		}(u)
 	}
 
 	// main loop
