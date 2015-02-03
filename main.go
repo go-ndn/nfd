@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"net"
-	"net/http"
-	_ "net/http/pprof"
 
 	"github.com/go-ndn/ndn"
 )
@@ -17,10 +15,6 @@ var (
 
 func main() {
 	flag.Parse()
-
-	// pprof
-	log("http://localhost:6060/debug/pprof/")
-	go http.ListenAndServe(":6060", nil)
 
 	// config
 	conf, err := NewConfig(*configPath)
