@@ -168,12 +168,12 @@ func HandleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
 	case "rib/register":
 		AddNextHop(params.Name.String(), f, true)
 		if *dummy {
-			SendControl(c.Module, c.Command, &c.Parameters.Parameters, func(f *Face) bool { return f.cost != 0 })
+			SendControl(c.Module, c.Command, &params, func(f *Face) bool { return f.cost != 0 })
 		}
 	case "rib/unregister":
 		RemoveNextHop(params.Name.String(), f)
 		if *dummy {
-			SendControl(c.Module, c.Command, &c.Parameters.Parameters, func(f *Face) bool { return f.cost != 0 })
+			SendControl(c.Module, c.Command, &params, func(f *Face) bool { return f.cost != 0 })
 		}
 	case "lsa/flood":
 		if *dummy || !IsLSANewer(params.LSA) {
