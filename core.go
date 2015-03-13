@@ -44,9 +44,7 @@ type connReq struct {
 
 func Run() {
 	log("start")
-	var (
-		lsaFloodTimer, lsaExpireTimer, fibUpdateTimer <-chan time.Time
-	)
+	var lsaFloodTimer, lsaExpireTimer, fibUpdateTimer <-chan time.Time
 	if !*dummy {
 		lsaFloodTimer = time.Tick(LSAFloodIntv)
 		lsaExpireTimer = time.Tick(LSAExpireIntv)
