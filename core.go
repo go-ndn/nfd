@@ -74,14 +74,12 @@ func handleLocal() {
 				}
 
 			REQ_DONE:
-				if v != nil {
-					d := &ndn.Data{Name: b.interest.Name}
-					d.Content, _ = ndn.Marshal(v, t)
-					ch := make(chan *ndn.Data, 1)
-					ch <- d
-					close(ch)
-					b.resp <- ch
-				}
+				d := &ndn.Data{Name: b.interest.Name}
+				d.Content, _ = ndn.Marshal(v, t)
+				ch := make(chan *ndn.Data, 1)
+				ch <- d
+				close(ch)
+				b.resp <- ch
 				close(b.resp)
 			}
 		}(route)
