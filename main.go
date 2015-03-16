@@ -10,7 +10,6 @@ import (
 var (
 	configPath = flag.String("config", "nfd.json", "config path")
 	debug      = flag.Bool("debug", false, "enable logging")
-	dummy      = flag.Bool("dummy", false, "disable routing and enable remote registration")
 )
 
 func main() {
@@ -21,13 +20,6 @@ func main() {
 	if err != nil {
 		log(err)
 		return
-	}
-	if conf.Id != "" {
-		Id = conf.Id
-	}
-	log("nfd id", Id)
-	if *dummy {
-		log("routing disabled")
 	}
 
 	// key
@@ -59,24 +51,24 @@ func main() {
 				if err != nil {
 					continue
 				}
-				FaceCreate <- &connReq{conn: conn}
+				FaceCreate <- conn
 			}
 		}()
 	}
 	for _, u := range conf.Remote {
-		go func(u Url) {
+		go func(u URL) {
 			for {
 				// retry until connection established
 				conn, err := net.Dial(u.Network, u.Address)
 				if err != nil {
 					continue
 				}
-				FaceCreate <- &connReq{conn: conn, cost: u.Cost}
+				FaceCreate <- conn
 				break
 			}
 		}(u)
 	}
 
-	// main loop
+	handleLocal()
 	Run()
 }

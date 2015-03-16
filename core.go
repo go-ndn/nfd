@@ -5,29 +5,24 @@ import (
 	"net"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
+	"unsafe"
 
 	"github.com/go-ndn/exact"
 	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/ndn"
-	"github.com/go-ndn/nfd/uuid"
 )
 
 var (
-	Id    = uuid.New()
 	Faces = make(map[*Face]struct{})
 
-	FaceCreate = make(chan *connReq)
+	FaceCreate = make(chan net.Conn)
 	ReqSend    = make(chan *req)
 	FaceClose  = make(chan *Face)
 
 	Forwarded = exact.New()
 	Fib       = lpm.New()
-
-	Rib        = make(map[string]*ndn.LSA)
-	RibUpdated = false
 )
 
 func log(i ...interface{}) {
@@ -37,46 +32,87 @@ func log(i ...interface{}) {
 	fmt.Printf("[core] %s", fmt.Sprintln(i...))
 }
 
-type connReq struct {
-	conn net.Conn
-	cost uint64
+func handleLocal() {
+	for _, route := range localRoute {
+		reqRecv := make(chan *req)
+		AddNextHop(lpm.Key(route.URL), reqRecv)
+		go func(route Route) {
+			for {
+				b := <-reqRecv
+				var (
+					v interface{}
+					t uint64
+				)
+				if route.HandleCommand != nil {
+					// command
+					t = 101
+					c := new(ndn.Command)
+					ndn.Copy(&b.interest.Name, c)
+					if c.Timestamp <= Timestamp || VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
+						v = RespNotAuthorized
+						goto REQ_DONE
+					}
+					Timestamp = c.Timestamp
+					params := &c.Parameters.Parameters
+
+					var f *Face
+					if params.FaceId == 0 {
+						f = b.sender
+					} else {
+						f = (*Face)(unsafe.Pointer(uintptr(params.FaceId)))
+						if _, ok := Faces[f]; !ok {
+							v = RespIncorrectParams
+							goto REQ_DONE
+						}
+					}
+
+					v = route.HandleCommand(params, f)
+				} else {
+					// dataset
+					t = 80
+					v = route.HandleDataset()
+				}
+
+			REQ_DONE:
+				if v != nil {
+					d := &ndn.Data{Name: b.interest.Name}
+					d.Content, _ = ndn.Marshal(v, t)
+					ch := make(chan *ndn.Data, 1)
+					ch <- d
+					close(ch)
+					b.resp <- ch
+				}
+				close(b.resp)
+			}
+		}(route)
+	}
 }
 
 func Run() {
 	log("start")
-	var lsaFloodTimer, lsaExpireTimer, fibUpdateTimer <-chan time.Time
-	if !*dummy {
-		lsaFloodTimer = time.Tick(LSAFloodIntv)
-		lsaExpireTimer = time.Tick(LSAExpireIntv)
-		fibUpdateTimer = time.Tick(FibUpdateIntv)
-	}
 
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 
 	for {
 		select {
-		case b := <-FaceCreate:
-			CreateFace(b)
+		case conn := <-FaceCreate:
+			ch := make(chan *ndn.Interest)
+			f := &Face{
+				Face:         ndn.NewFace(conn, ch),
+				reqRecv:      make(chan *req),
+				interestRecv: ch,
+				route:        make(map[string]ndn.Route),
+			}
+			Faces[f] = struct{}{}
+			f.log("face created")
+			go f.Run()
 		case b := <-ReqSend:
 			HandleReq(b)
-		case <-fibUpdateTimer:
-			if !RibUpdated {
-				continue
-			}
-			log("update fib")
-			RibUpdated = false
-			UpdateFib()
-		case <-lsaFloodTimer:
-			log("flood lsa")
-			FloodLSA(CreateLSA(), nil)
-		case <-lsaExpireTimer:
-			log("remove expired lsa")
-			RemoveExpiredLSA()
 		case f := <-FaceClose:
 			delete(Faces, f)
-			for name := range f.registered {
-				RemoveNextHop(name, f)
+			for name := range f.route {
+				RemoveNextHop(ndn.NewName(name), f.reqRecv)
 			}
 			f.log("face removed")
 		case <-quit:
@@ -86,26 +122,35 @@ func Run() {
 	}
 }
 
-func CreateFace(b *connReq) {
-	ch := make(chan *ndn.Interest)
-	f := &Face{
-		Face:         ndn.NewFace(b.conn, ch),
-		reqRecv:      make(chan *req),
-		interestRecv: ch,
-		registered:   make(map[string]bool),
-		cost:         b.cost,
-	}
-	Faces[f] = struct{}{}
-	f.log("face created")
-	go f.Run()
+func AddNextHop(name fmt.Stringer, ch chan<- *req) {
+	Fib.Update(name, func(chs interface{}) interface{} {
+		var m map[chan<- *req]struct{}
+		if chs == nil {
+			m = make(map[chan<- *req]struct{})
+		} else {
+			m = chs.(map[chan<- *req]struct{})
+		}
+		m[ch] = struct{}{}
+		return m
+	}, false)
+}
+
+func RemoveNextHop(name fmt.Stringer, ch chan<- *req) {
+	Fib.Update(name, func(chs interface{}) interface{} {
+		if chs == nil {
+			return nil
+		}
+		m := chs.(map[chan<- *req]struct{})
+		delete(m, ch)
+		if len(m) == 0 {
+			return nil
+		}
+		return m
+	}, false)
 }
 
 func HandleReq(b *req) {
 	defer close(b.resp)
-	if strings.HasPrefix(b.interest.Name.String(), "/localhost/nfd/") {
-		HandleLocal(b)
-		return
-	}
 	chs := Fib.Match(b.interest.Name)
 	if chs == nil {
 		return
@@ -135,75 +180,4 @@ func HandleReq(b *req) {
 		}()
 		return struct{}{}
 	})
-}
-
-func HandleLocal(b *req) {
-	c := new(ndn.Command)
-	err := ndn.Copy(&b.interest.Name, c)
-	if err != nil {
-		return
-	}
-	d := &ndn.Data{Name: b.interest.Name}
-	d.Content, err = ndn.Marshal(HandleCommand(c, b.sender), 101)
-	if err != nil {
-		return
-	}
-	ch := make(chan *ndn.Data, 1)
-	ch <- d
-	close(ch)
-	b.resp <- ch
-}
-
-func HandleCommand(c *ndn.Command, f *Face) (resp *ndn.ControlResponse) {
-	if c.Timestamp <= Timestamp || VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
-		resp = RespNotAuthorized
-		return
-	}
-	Timestamp = c.Timestamp
-	resp = RespOK
-	params := c.Parameters.Parameters
-	switch c.Module + "/" + c.Command {
-	case "rib/register":
-		AddNextHop(params.Name.String(), f, true)
-		if *dummy {
-			SendControl(c.Module, c.Command, &params, func(f *Face) bool { return f.cost != 0 })
-		}
-	case "rib/unregister":
-		RemoveNextHop(params.Name.String(), f)
-		if *dummy {
-			SendControl(c.Module, c.Command, &params, func(f *Face) bool { return f.cost != 0 })
-		}
-	case "lsa/flood":
-		if *dummy || !IsLSANewer(params.LSA) {
-			return
-		}
-		f.log("flood lsa", params.LSA.Id, "from", params.Uri)
-		Rib[params.LSA.Id] = params.LSA
-		RibUpdated = true
-		f.id = params.Uri
-		FloodLSA(params.LSA, f)
-	default:
-		resp = RespNotSupported
-	}
-	return
-}
-
-func SendControl(module, command string, params *ndn.Parameters, validate func(*Face) bool) {
-	c := new(ndn.Command)
-	c.Module = module
-	c.Command = command
-	c.Parameters.Parameters = *params
-	i := new(ndn.Interest)
-	ndn.Copy(c, &i.Name)
-	for f := range Faces {
-		if !validate(f) {
-			continue
-		}
-		resp := make(chan (<-chan *ndn.Data))
-		f.reqRecv <- &req{
-			interest: i,
-			resp:     resp,
-		}
-		<-resp
-	}
 }

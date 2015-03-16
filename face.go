@@ -11,9 +11,7 @@ type Face struct {
 	reqRecv      chan *req            // recv req from core
 	interestRecv <-chan *ndn.Interest // recv interest from remote
 
-	registered map[string]bool // true if prefix is registered directly
-	id         string          // id != "" if face runs routing protocol
-	cost       uint64          // cost != 0 if core initiates connection
+	route map[string]ndn.Route
 }
 
 func (this *Face) log(i ...interface{}) {

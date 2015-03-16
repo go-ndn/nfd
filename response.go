@@ -17,8 +17,4 @@ var (
 		StatusCode: 403,
 		StatusText: "Not Authorized",
 	}
-	RespNotSupported = &ndn.ControlResponse{
-		StatusCode: 501,
-		StatusText: "Not Supported",
-	}
 )

@@ -5,15 +5,13 @@ import (
 	"os"
 )
 
-type Url struct {
+type URL struct {
 	Network, Address string
-	Cost             uint64
 }
 
 type Config struct {
-	Id              string
-	Listen          []Url
-	Remote          []Url
+	Listen          []URL
+	Remote          []URL
 	CertificatePath string
 	PrivateKeyPath  string
 }
