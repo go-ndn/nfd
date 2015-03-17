@@ -18,7 +18,7 @@ func (f *Face) log(i ...interface{}) {
 	if !*debug {
 		return
 	}
-	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
+	fmt.Printf("[%s] %s\n", f.RemoteAddr(), fmt.Sprint(i...))
 }
 
 type req struct {

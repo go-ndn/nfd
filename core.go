@@ -29,7 +29,7 @@ func log(i ...interface{}) {
 	if !*debug {
 		return
 	}
-	fmt.Printf("[core] %s", fmt.Sprintln(i...))
+	fmt.Printf("[core] %s\n", fmt.Sprint(i...))
 }
 
 func handleLocal() {
