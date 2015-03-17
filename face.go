@@ -14,11 +14,11 @@ type Face struct {
 	route map[string]ndn.Route
 }
 
-func (this *Face) log(i ...interface{}) {
+func (f *Face) log(i ...interface{}) {
 	if !*debug {
 		return
 	}
-	fmt.Printf("[%s] %s", this.RemoteAddr(), fmt.Sprintln(i...))
+	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
 }
 
 type req struct {
@@ -27,7 +27,7 @@ type req struct {
 	resp     chan (<-chan *ndn.Data) // recv resp from core
 }
 
-func (this *Face) Run() {
+func (f *Face) Run() {
 	// send req with queue
 	var sendPending []*req
 
@@ -43,7 +43,7 @@ func (this *Face) Run() {
 		// shutdown
 		var faceClose chan<- *Face
 
-		if this.interestRecv == nil {
+		if f.interestRecv == nil {
 			// when face is closing, it will not send to other faces
 			faceClose = FaceClose
 		} else if len(sendPending) > 0 {
@@ -51,16 +51,16 @@ func (this *Face) Run() {
 			send = ReqSend
 		}
 		select {
-		case i, ok := <-this.interestRecv:
+		case i, ok := <-f.interestRecv:
 			if !ok {
 				// this face will not accept new interest
-				this.interestRecv = nil
-				this.log("face idle")
+				f.interestRecv = nil
+				f.log("face idle")
 				continue
 			}
-			this.log("recv interest", i.Name)
+			f.log("recv interest", i.Name)
 			sendPending = append(sendPending, &req{
-				sender:   this,
+				sender:   f,
 				interest: i,
 				resp:     make(chan (<-chan *ndn.Data)),
 			})
@@ -82,23 +82,23 @@ func (this *Face) Run() {
 				}(ch)
 			}
 		case d := <-recv:
-			this.log("send data", d.Name)
-			this.SendData(d)
-		case b := <-this.reqRecv:
-			if this.interestRecv != nil {
-				ch, err := this.SendInterest(b.interest)
+			f.log("send data", d.Name)
+			f.SendData(d)
+		case rq := <-f.reqRecv:
+			if f.interestRecv != nil {
+				ch, err := f.SendInterest(rq.interest)
 				if err == nil {
 					sender := "core"
-					if b.sender != nil {
-						sender = b.sender.RemoteAddr().String()
+					if rq.sender != nil {
+						sender = rq.sender.RemoteAddr().String()
 					}
-					this.log("forward", b.interest.Name, "from", sender)
-					b.resp <- ch
+					f.log("forward", rq.interest.Name, "from", sender)
+					rq.resp <- ch
 				}
 			}
-			close(b.resp)
-		case faceClose <- this:
-			this.Close()
+			close(rq.resp)
+		case faceClose <- f:
+			f.Close()
 			close(recvDone)
 			return
 		}

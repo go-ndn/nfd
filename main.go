@@ -37,14 +37,14 @@ func main() {
 	log("verifyKey", VerifyKey.Name)
 
 	// create faces
-	for _, u := range conf.Listen {
-		ln, err := net.Listen(u.Network, u.Address)
+	for _, url := range conf.Listen {
+		ln, err := net.Listen(url.Network, url.Address)
 		if err != nil {
 			log(err)
 			return
 		}
 		defer ln.Close()
-		log("listen", u.Network, u.Address)
+		log("listen", url.Network, url.Address)
 		go func() {
 			for {
 				conn, err := ln.Accept()
@@ -55,18 +55,18 @@ func main() {
 			}
 		}()
 	}
-	for _, u := range conf.Remote {
-		go func(u URL) {
+	for _, url := range conf.Remote {
+		go func(url URL) {
 			for {
 				// retry until connection established
-				conn, err := net.Dial(u.Network, u.Address)
+				conn, err := net.Dial(url.Network, url.Address)
 				if err != nil {
 					continue
 				}
 				FaceCreate <- conn
 				break
 			}
-		}(u)
+		}(url)
 	}
 
 	handleLocal()

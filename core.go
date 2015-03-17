@@ -22,7 +22,7 @@ var (
 	FaceClose  = make(chan *Face)
 
 	Forwarded = exact.New()
-	Fib       = lpm.New()
+	FIB       = lpm.New()
 )
 
 func log(i ...interface{}) {
@@ -38,7 +38,7 @@ func handleLocal() {
 		AddNextHop(lpm.Key(route.URL), reqRecv)
 		go func(route Route) {
 			for {
-				b := <-reqRecv
+				rq := <-reqRecv
 				var (
 					v interface{}
 					t uint64
@@ -46,27 +46,27 @@ func handleLocal() {
 				if route.HandleCommand != nil {
 					// command
 					t = 101
-					c := new(ndn.Command)
-					ndn.Copy(&b.interest.Name, c)
-					if c.Timestamp <= Timestamp || VerifyKey.Verify(c, c.SignatureValue.SignatureValue) != nil {
+					cmd := new(ndn.Command)
+					ndn.Copy(&rq.interest.Name, cmd)
+					if cmd.Timestamp <= Timestamp || VerifyKey.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
 						v = RespNotAuthorized
 						goto REQ_DONE
 					}
-					Timestamp = c.Timestamp
-					params := &c.Parameters.Parameters
+					Timestamp = cmd.Timestamp
+					params := &cmd.Parameters.Parameters
 
-					var f *Face
-					if params.FaceId == 0 {
-						f = b.sender
+					var face *Face
+					if params.FaceID == 0 {
+						face = rq.sender
 					} else {
-						f = (*Face)(unsafe.Pointer(uintptr(params.FaceId)))
-						if _, ok := Faces[f]; !ok {
+						face = (*Face)(unsafe.Pointer(uintptr(params.FaceID)))
+						if _, ok := Faces[face]; !ok {
 							v = RespIncorrectParams
 							goto REQ_DONE
 						}
 					}
 
-					v = route.HandleCommand(params, f)
+					v = route.HandleCommand(params, face)
 				} else {
 					// dataset
 					t = 128
@@ -74,13 +74,13 @@ func handleLocal() {
 				}
 
 			REQ_DONE:
-				d := &ndn.Data{Name: b.interest.Name}
+				d := &ndn.Data{Name: rq.interest.Name}
 				d.Content, _ = ndn.Marshal(v, t)
 				ch := make(chan *ndn.Data, 1)
 				ch <- d
 				close(ch)
-				b.resp <- ch
-				close(b.resp)
+				rq.resp <- ch
+				close(rq.resp)
 			}
 		}(route)
 	}
@@ -96,23 +96,23 @@ func Run() {
 		select {
 		case conn := <-FaceCreate:
 			ch := make(chan *ndn.Interest)
-			f := &Face{
+			face := &Face{
 				Face:         ndn.NewFace(conn, ch),
 				reqRecv:      make(chan *req),
 				interestRecv: ch,
 				route:        make(map[string]ndn.Route),
 			}
-			Faces[f] = struct{}{}
-			f.log("face created")
-			go f.Run()
-		case b := <-ReqSend:
-			HandleReq(b)
-		case f := <-FaceClose:
-			delete(Faces, f)
-			for name := range f.route {
-				RemoveNextHop(ndn.NewName(name), f.reqRecv)
+			Faces[face] = struct{}{}
+			face.log("face created")
+			go face.Run()
+		case rq := <-ReqSend:
+			HandleReq(rq)
+		case face := <-FaceClose:
+			delete(Faces, face)
+			for name := range face.route {
+				RemoveNextHop(ndn.NewName(name), face.reqRecv)
 			}
-			f.log("face removed")
+			face.log("face removed")
 		case <-quit:
 			log("goodbye")
 			return
@@ -121,12 +121,12 @@ func Run() {
 }
 
 func AddNextHop(name fmt.Stringer, ch chan<- *req) {
-	Fib.Update(name, func(chs interface{}) interface{} {
+	FIB.Update(name, func(v interface{}) interface{} {
 		var m map[chan<- *req]struct{}
-		if chs == nil {
+		if v == nil {
 			m = make(map[chan<- *req]struct{})
 		} else {
-			m = chs.(map[chan<- *req]struct{})
+			m = v.(map[chan<- *req]struct{})
 		}
 		m[ch] = struct{}{}
 		return m
@@ -134,11 +134,11 @@ func AddNextHop(name fmt.Stringer, ch chan<- *req) {
 }
 
 func RemoveNextHop(name fmt.Stringer, ch chan<- *req) {
-	Fib.Update(name, func(chs interface{}) interface{} {
-		if chs == nil {
+	FIB.Update(name, func(v interface{}) interface{} {
+		if v == nil {
 			return nil
 		}
-		m := chs.(map[chan<- *req]struct{})
+		m := v.(map[chan<- *req]struct{})
 		delete(m, ch)
 		if len(m) == 0 {
 			return nil
@@ -147,35 +147,35 @@ func RemoveNextHop(name fmt.Stringer, ch chan<- *req) {
 	}, false)
 }
 
-func HandleReq(b *req) {
-	defer close(b.resp)
-	chs := Fib.Match(b.interest.Name)
-	if chs == nil {
+func HandleReq(rq *req) {
+	defer close(rq.resp)
+	v := FIB.Match(rq.interest.Name)
+	if v == nil {
 		return
 	}
-	k := exact.Key(fmt.Sprintf("%s/%x", b.interest.Name, b.interest.Nonce))
-	Forwarded.Update(k, func(v interface{}) interface{} {
-		if v != nil {
-			b.sender.log("loop detected", k)
-			return v
-		}
-		for ch := range chs.(map[chan<- *req]struct{}) {
-			resp := make(chan (<-chan *ndn.Data))
-			ch <- &req{
-				interest: b.interest,
-				sender:   b.sender,
-				resp:     resp,
+	key := exact.Key(fmt.Sprintf("%s/%x", rq.interest.Name, rq.interest.Nonce))
+	Forwarded.Update(key, func(fw interface{}) interface{} {
+		if fw == nil {
+			for ch := range v.(map[chan<- *req]struct{}) {
+				resp := make(chan (<-chan *ndn.Data))
+				ch <- &req{
+					interest: rq.interest,
+					sender:   rq.sender,
+					resp:     resp,
+				}
+				ret, ok := <-resp
+				if ok {
+					rq.resp <- ret
+					break
+				}
 			}
-			r, ok := <-resp
-			if ok {
-				b.resp <- r
-				break
-			}
+			go func() {
+				time.Sleep(LoopDetectIntv)
+				Forwarded.Remove(key)
+			}()
+		} else {
+			rq.sender.log("loop detected", key)
 		}
-		go func() {
-			time.Sleep(LoopDetectIntv)
-			Forwarded.Remove(k)
-		}()
 		return struct{}{}
 	})
 }

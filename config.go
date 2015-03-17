@@ -16,14 +16,14 @@ type Config struct {
 	PrivateKeyPath  string
 }
 
-func NewConfig(file string) (c *Config, err error) {
+func NewConfig(file string) (conf *Config, err error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
-	c = new(Config)
-	err = dec.Decode(c)
+	conf = new(Config)
+	err = dec.Decode(conf)
 	return
 }
