@@ -1,4 +1,4 @@
-Nfd
+NFD
 ===
 This is an alternative implementation of nfd, ndn forwarding daemon.
 

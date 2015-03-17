@@ -39,7 +39,7 @@ var (
 			URL: "/localhost/nfd/rib/list",
 			HandleDataset: func() interface{} {
 				index := make(map[string]int)
-				var routes []ndn.RibEntry
+				var routes []ndn.RIBEntry
 				for face := range Faces {
 					faceID := uint64(uintptr(unsafe.Pointer(face)))
 					for name, route := range face.route {
@@ -48,7 +48,7 @@ var (
 							routes[i].Route = append(routes[i].Route, route)
 						} else {
 							index[name] = len(routes)
-							routes = append(routes, ndn.RibEntry{
+							routes = append(routes, ndn.RIBEntry{
 								Name:  ndn.NewName(name),
 								Route: []ndn.Route{route},
 							})
