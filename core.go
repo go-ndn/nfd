@@ -170,7 +170,7 @@ func HandleReq(rq *req) {
 				}
 			}
 			go func() {
-				time.Sleep(LoopDetectIntv)
+				time.Sleep(time.Minute)
 				Forwarded.Remove(key)
 			}()
 		} else {
