@@ -6,43 +6,43 @@ import (
 	"github.com/go-ndn/ndn"
 )
 
-type Route struct {
-	URL           string
-	HandleCommand func(*ndn.Parameters, *Face) interface{}
-	HandleDataset func() interface{}
+type route struct {
+	url           string
+	handleCommand func(*ndn.Parameters, *face) interface{}
+	handleDataset func() interface{}
 }
 
 var (
-	localRoute = []Route{
+	localRoute = []route{
 		{
-			URL: "/localhost/nfd/rib/register",
-			HandleCommand: func(params *ndn.Parameters, face *Face) interface{} {
-				face.log("rib/register")
-				face.route[params.Name.String()] = ndn.Route{
+			url: "/localhost/nfd/rib/register",
+			handleCommand: func(params *ndn.Parameters, f *face) interface{} {
+				f.log("rib/register")
+				f.route[params.Name.String()] = ndn.Route{
 					Origin: params.Origin,
 					Cost:   params.Cost,
 				}
-				AddNextHop(params.Name, face.reqRecv)
-				return RespOK
+				addNextHop(params.Name, f.reqRecv)
+				return respOK
 			},
 		},
 		{
-			URL: "/localhost/nfd/rib/unregister",
-			HandleCommand: func(params *ndn.Parameters, face *Face) interface{} {
-				face.log("rib/unregister")
-				delete(face.route, params.Name.String())
-				RemoveNextHop(params.Name, face.reqRecv)
-				return RespOK
+			url: "/localhost/nfd/rib/unregister",
+			handleCommand: func(params *ndn.Parameters, f *face) interface{} {
+				f.log("rib/unregister")
+				delete(f.route, params.Name.String())
+				removeNextHop(params.Name, f.reqRecv)
+				return respOK
 			},
 		},
 		{
-			URL: "/localhost/nfd/rib/list",
-			HandleDataset: func() interface{} {
+			url: "/localhost/nfd/rib/list",
+			handleDataset: func() interface{} {
 				index := make(map[string]int)
 				var routes []ndn.RIBEntry
-				for face := range Faces {
-					faceID := uint64(uintptr(unsafe.Pointer(face)))
-					for name, route := range face.route {
+				for f := range faces {
+					faceID := uint64(uintptr(unsafe.Pointer(f)))
+					for name, route := range f.route {
 						route.FaceID = faceID
 						if i, ok := index[name]; ok {
 							routes[i].Route = append(routes[i].Route, route)

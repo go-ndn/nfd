@@ -5,25 +5,25 @@ import (
 	"os"
 )
 
-type URL struct {
+type url struct {
 	Network, Address string
 }
 
-type Config struct {
-	Listen          []URL
-	Remote          []URL
+type config struct {
+	Listen          []url
+	Remote          []url
 	CertificatePath string
 	PrivateKeyPath  string
 }
 
-func NewConfig(file string) (conf *Config, err error) {
+func newConfig(file string) (conf *config, err error) {
 	f, err := os.Open(file)
 	if err != nil {
 		return
 	}
 	defer f.Close()
 	dec := json.NewDecoder(f)
-	conf = new(Config)
+	conf = new(config)
 	err = dec.Decode(conf)
 	return
 }

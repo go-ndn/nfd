@@ -6,7 +6,7 @@ import (
 	"github.com/go-ndn/ndn"
 )
 
-type Face struct {
+type face struct {
 	*ndn.Face
 	reqRecv      chan *req            // recv req from core
 	interestRecv <-chan *ndn.Interest // recv interest from remote
@@ -14,20 +14,20 @@ type Face struct {
 	route map[string]ndn.Route
 }
 
-func (f *Face) log(i ...interface{}) {
+func (f *face) log(i ...interface{}) {
 	if !*debug {
 		return
 	}
-	fmt.Printf("[%s] %s\n", f.RemoteAddr(), fmt.Sprint(i...))
+	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
 }
 
 type req struct {
-	sender   *Face
+	sender   *face
 	interest *ndn.Interest
 	resp     chan (<-chan *ndn.Data) // recv resp from core
 }
 
-func (f *Face) Run() {
+func (f *face) run() {
 	// send req with queue
 	var sendPending []*req
 
@@ -41,14 +41,14 @@ func (f *Face) Run() {
 		var sendFirst *req
 
 		// shutdown
-		var faceClose chan<- *Face
+		var idle chan<- *face
 
 		if f.interestRecv == nil {
 			// when face is closing, it will not send to other faces
-			faceClose = FaceClose
+			idle = faceClose
 		} else if len(sendPending) > 0 {
 			sendFirst = sendPending[0]
-			send = ReqSend
+			send = reqSend
 		}
 		select {
 		case i, ok := <-f.interestRecv:
@@ -97,7 +97,7 @@ func (f *Face) Run() {
 				}
 			}
 			close(rq.resp)
-		case faceClose <- f:
+		case idle <- f:
 			f.Close()
 			close(recvDone)
 			return

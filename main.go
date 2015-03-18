@@ -16,59 +16,59 @@ func main() {
 	flag.Parse()
 
 	// config
-	conf, err := NewConfig(*configPath)
+	conf, err := newConfig(*configPath)
 	if err != nil {
 		log(err)
 		return
 	}
 
 	// key
-	err = DecodePrivateKey(conf.PrivateKeyPath)
+	err = decodePrivateKey(conf.PrivateKeyPath)
 	if err != nil {
 		log(err)
 		return
 	}
-	log("signKey", ndn.SignKey.Name)
-	err = DecodeCertificate(conf.CertificatePath)
+	log("sign key", ndn.SignKey.Name)
+	err = decodeCertificate(conf.CertificatePath)
 	if err != nil {
 		log(err)
 		return
 	}
-	log("verifyKey", VerifyKey.Name)
+	log("verify key", verifyKey.Name)
 
 	// create faces
-	for _, url := range conf.Listen {
-		ln, err := net.Listen(url.Network, url.Address)
+	for _, u := range conf.Listen {
+		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
 			log(err)
 			return
 		}
 		defer ln.Close()
-		log("listen", url.Network, url.Address)
+		log("listen", u.Network, u.Address)
 		go func() {
 			for {
 				conn, err := ln.Accept()
 				if err != nil {
 					continue
 				}
-				FaceCreate <- conn
+				faceCreate <- conn
 			}
 		}()
 	}
-	for _, url := range conf.Remote {
-		go func(url URL) {
+	for _, u := range conf.Remote {
+		go func(u url) {
 			for {
 				// retry until connection established
-				conn, err := net.Dial(url.Network, url.Address)
+				conn, err := net.Dial(u.Network, u.Address)
 				if err != nil {
 					continue
 				}
-				FaceCreate <- conn
+				faceCreate <- conn
 				break
 			}
-		}(url)
+		}(u)
 	}
 
 	handleLocal()
-	Run()
+	run()
 }

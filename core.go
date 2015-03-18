@@ -15,62 +15,62 @@ import (
 )
 
 var (
-	Faces = make(map[*Face]struct{})
+	faces = make(map[*face]struct{})
 
-	FaceCreate = make(chan net.Conn)
-	ReqSend    = make(chan *req)
-	FaceClose  = make(chan *Face)
+	faceCreate = make(chan net.Conn)
+	reqSend    = make(chan *req)
+	faceClose  = make(chan *face)
 
-	Forwarded = exact.New()
-	FIB       = lpm.New()
+	forwarded = exact.New()
+	fib       = lpm.New()
 )
 
 func log(i ...interface{}) {
 	if !*debug {
 		return
 	}
-	fmt.Printf("[core] %s\n", fmt.Sprint(i...))
+	fmt.Printf("[core] %s", fmt.Sprintln(i...))
 }
 
 func handleLocal() {
-	for _, route := range localRoute {
+	for _, rt := range localRoute {
 		reqRecv := make(chan *req)
-		AddNextHop(lpm.Key(route.URL), reqRecv)
-		go func(route Route) {
+		addNextHop(lpm.Key(rt.url), reqRecv)
+		go func(rt route) {
 			for {
 				rq := <-reqRecv
 				var (
 					v interface{}
 					t uint64
 				)
-				if route.HandleCommand != nil {
+				if rt.handleCommand != nil {
 					// command
 					t = 101
 					cmd := new(ndn.Command)
 					ndn.Copy(&rq.interest.Name, cmd)
-					if cmd.Timestamp <= Timestamp || VerifyKey.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-						v = RespNotAuthorized
+					if cmd.Timestamp <= timestamp || verifyKey.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
+						v = respNotAuthorized
 						goto REQ_DONE
 					}
-					Timestamp = cmd.Timestamp
+					timestamp = cmd.Timestamp
 					params := &cmd.Parameters.Parameters
 
-					var face *Face
+					var f *face
 					if params.FaceID == 0 {
-						face = rq.sender
+						f = rq.sender
 					} else {
-						face = (*Face)(unsafe.Pointer(uintptr(params.FaceID)))
-						if _, ok := Faces[face]; !ok {
-							v = RespIncorrectParams
+						f = (*face)(unsafe.Pointer(uintptr(params.FaceID)))
+						if _, ok := faces[f]; !ok {
+							v = respIncorrectParams
 							goto REQ_DONE
 						}
 					}
 
-					v = route.HandleCommand(params, face)
+					v = rt.handleCommand(params, f)
 				} else {
 					// dataset
 					t = 128
-					v = route.HandleDataset()
+					v = rt.handleDataset()
 				}
 
 			REQ_DONE:
@@ -82,11 +82,11 @@ func handleLocal() {
 				rq.resp <- ch
 				close(rq.resp)
 			}
-		}(route)
+		}(rt)
 	}
 }
 
-func Run() {
+func run() {
 	log("start")
 
 	quit := make(chan os.Signal)
@@ -94,25 +94,25 @@ func Run() {
 
 	for {
 		select {
-		case conn := <-FaceCreate:
+		case conn := <-faceCreate:
 			ch := make(chan *ndn.Interest)
-			face := &Face{
+			f := &face{
 				Face:         ndn.NewFace(conn, ch),
 				reqRecv:      make(chan *req),
 				interestRecv: ch,
 				route:        make(map[string]ndn.Route),
 			}
-			Faces[face] = struct{}{}
-			face.log("face created")
-			go face.Run()
-		case rq := <-ReqSend:
-			HandleReq(rq)
-		case face := <-FaceClose:
-			delete(Faces, face)
-			for name := range face.route {
-				RemoveNextHop(ndn.NewName(name), face.reqRecv)
+			faces[f] = struct{}{}
+			f.log("face created")
+			go f.run()
+		case rq := <-reqSend:
+			handleReq(rq)
+		case f := <-faceClose:
+			delete(faces, f)
+			for name := range f.route {
+				removeNextHop(ndn.NewName(name), f.reqRecv)
 			}
-			face.log("face removed")
+			f.log("face removed")
 		case <-quit:
 			log("goodbye")
 			return
@@ -120,8 +120,8 @@ func Run() {
 	}
 }
 
-func AddNextHop(name fmt.Stringer, ch chan<- *req) {
-	FIB.Update(name, func(v interface{}) interface{} {
+func addNextHop(name fmt.Stringer, ch chan<- *req) {
+	fib.Update(name, func(v interface{}) interface{} {
 		var m map[chan<- *req]struct{}
 		if v == nil {
 			m = make(map[chan<- *req]struct{})
@@ -133,8 +133,8 @@ func AddNextHop(name fmt.Stringer, ch chan<- *req) {
 	}, false)
 }
 
-func RemoveNextHop(name fmt.Stringer, ch chan<- *req) {
-	FIB.Update(name, func(v interface{}) interface{} {
+func removeNextHop(name fmt.Stringer, ch chan<- *req) {
+	fib.Update(name, func(v interface{}) interface{} {
 		if v == nil {
 			return nil
 		}
@@ -147,14 +147,14 @@ func RemoveNextHop(name fmt.Stringer, ch chan<- *req) {
 	}, false)
 }
 
-func HandleReq(rq *req) {
+func handleReq(rq *req) {
 	defer close(rq.resp)
-	v := FIB.Match(rq.interest.Name)
+	v := fib.Match(rq.interest.Name)
 	if v == nil {
 		return
 	}
 	key := exact.Key(fmt.Sprintf("%s/%x", rq.interest.Name, rq.interest.Nonce))
-	Forwarded.Update(key, func(fw interface{}) interface{} {
+	forwarded.Update(key, func(fw interface{}) interface{} {
 		if fw == nil {
 			for ch := range v.(map[chan<- *req]struct{}) {
 				resp := make(chan (<-chan *ndn.Data))
@@ -171,7 +171,7 @@ func HandleReq(rq *req) {
 			}
 			go func() {
 				time.Sleep(time.Minute)
-				Forwarded.Remove(key)
+				forwarded.Remove(key)
 			}()
 		} else {
 			rq.sender.log("loop detected", key)

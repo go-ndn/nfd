@@ -5,15 +5,15 @@ import (
 )
 
 var (
-	RespOK = &ndn.ControlResponse{
+	respOK = &ndn.ControlResponse{
 		StatusCode: 200,
 		StatusText: "OK",
 	}
-	RespIncorrectParams = &ndn.ControlResponse{
+	respIncorrectParams = &ndn.ControlResponse{
 		StatusCode: 400,
 		StatusText: "Incorrect Parameters",
 	}
-	RespNotAuthorized = &ndn.ControlResponse{
+	respNotAuthorized = &ndn.ControlResponse{
 		StatusCode: 403,
 		StatusText: "Not Authorized",
 	}
