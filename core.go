@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 	"time"
-	"unsafe"
 
 	"github.com/go-ndn/exact"
 	"github.com/go-ndn/lpm"
@@ -15,7 +14,8 @@ import (
 )
 
 var (
-	faces = make(map[*face]struct{})
+	lastFaceID = uint64(255)
+	faces      = make(map[uint64]*face)
 
 	faceCreate = make(chan net.Conn)
 	reqSend    = make(chan *req)
@@ -24,6 +24,11 @@ var (
 	forwarded = exact.New()
 	fib       = lpm.New()
 )
+
+func newFaceID() (id uint64) {
+	lastFaceID++
+	return lastFaceID
+}
 
 func log(i ...interface{}) {
 	if !*debug {
@@ -59,8 +64,9 @@ func handleLocal() {
 					if params.FaceID == 0 {
 						f = rq.sender
 					} else {
-						f = (*face)(unsafe.Pointer(uintptr(params.FaceID)))
-						if _, ok := faces[f]; !ok {
+						var ok bool
+						f, ok = faces[params.FaceID]
+						if !ok {
 							v = respIncorrectParams
 							goto REQ_DONE
 						}
@@ -100,15 +106,17 @@ func run() {
 				Face:         ndn.NewFace(conn, ch),
 				reqRecv:      make(chan *req),
 				interestRecv: ch,
-				route:        make(map[string]ndn.Route),
+
+				id:    newFaceID(),
+				route: make(map[string]ndn.Route),
 			}
-			faces[f] = struct{}{}
+			faces[f.id] = f
 			f.log("face created")
 			go f.run()
 		case rq := <-reqSend:
 			handleReq(rq)
 		case f := <-faceClose:
-			delete(faces, f)
+			delete(faces, f.id)
 			for name := range f.route {
 				removeNextHop(ndn.NewName(name), f.reqRecv)
 			}

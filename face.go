@@ -11,6 +11,7 @@ type face struct {
 	reqRecv      chan *req            // recv req from core
 	interestRecv <-chan *ndn.Interest // recv interest from remote
 
+	id    uint64
 	route map[string]ndn.Route
 }
 

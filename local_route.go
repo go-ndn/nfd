@@ -1,10 +1,6 @@
 package main
 
-import (
-	"unsafe"
-
-	"github.com/go-ndn/ndn"
-)
+import "github.com/go-ndn/ndn"
 
 type route struct {
 	url           string
@@ -40,10 +36,9 @@ var (
 			handleDataset: func() interface{} {
 				index := make(map[string]int)
 				var routes []ndn.RIBEntry
-				for f := range faces {
-					faceID := uint64(uintptr(unsafe.Pointer(f)))
+				for id, f := range faces {
 					for name, route := range f.route {
-						route.FaceID = faceID
+						route.FaceID = id
 						if i, ok := index[name]; ok {
 							routes[i].Route = append(routes[i].Route, route)
 						} else {
