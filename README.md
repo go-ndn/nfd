@@ -22,7 +22,7 @@ What is supported
 - [x] some control commands
 - [x] forwarding
 - [x] content store
-- [x] certificate
+- [x] authentication
 
 License
 =======

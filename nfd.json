@@ -1,5 +1,4 @@
 {
-  "CertificatePath": "key/default.ndncert",
   "PrivateKeyPath": "key/default.pri",
   "Listen": [
     {

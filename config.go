@@ -10,10 +10,9 @@ type url struct {
 }
 
 type config struct {
-	Listen          []url
-	Remote          []url
-	CertificatePath string
-	PrivateKeyPath  string
+	Listen         []url
+	Remote         []url
+	PrivateKeyPath string
 }
 
 func newConfig(file string) (conf *config, err error) {

@@ -3,8 +3,6 @@ package main
 import (
 	"flag"
 	"net"
-
-	"github.com/go-ndn/ndn"
 )
 
 var (
@@ -28,13 +26,7 @@ func main() {
 		log(err)
 		return
 	}
-	log("sign key", ndn.SignKey.Name)
-	err = decodeCertificate(conf.CertificatePath)
-	if err != nil {
-		log(err)
-		return
-	}
-	log("verify key", verifyKey.Name)
+	log("key", key.Name)
 
 	// create faces
 	for _, u := range conf.Listen {

@@ -53,7 +53,7 @@ func handleLocal() {
 					t = 101
 					cmd := new(ndn.Command)
 					ndn.Copy(&rq.interest.Name, cmd)
-					if cmd.Timestamp <= timestamp || verifyKey.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
+					if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
 						v = respNotAuthorized
 						goto REQ_DONE
 					}
