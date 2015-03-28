@@ -11,6 +11,7 @@ import (
 	"github.com/go-ndn/exact"
 	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/ndn"
+	"github.com/go-ndn/tlv"
 )
 
 var (
@@ -52,7 +53,7 @@ func handleLocal() {
 					// command
 					t = 101
 					cmd := new(ndn.Command)
-					ndn.Copy(&rq.interest.Name, cmd)
+					tlv.Copy(&rq.interest.Name, cmd)
 					if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
 						v = respNotAuthorized
 						goto REQ_DONE
@@ -81,7 +82,7 @@ func handleLocal() {
 
 			REQ_DONE:
 				d := &ndn.Data{Name: rq.interest.Name}
-				d.Content, _ = ndn.Marshal(v, t)
+				d.Content, _ = tlv.MarshalByte(v, t)
 				ch := make(chan *ndn.Data, 1)
 				ch <- d
 				close(ch)
