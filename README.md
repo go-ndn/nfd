@@ -1,7 +1,12 @@
-# NFD (GPL2)
-This is an alternative implementation of nfd, ndn forwarding daemon.
+# NDN Forwarding Daemon (NFD)
+
+This is an alternative implementation of nfd, NDN forwarding daemon.
 
 It is small, and go get-able.
+
+The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 license.
+
+# Design
 
 Each face runs in its own goroutine, and the core handles communication between each faces.
 
