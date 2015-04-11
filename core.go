@@ -11,7 +11,6 @@ import (
 	"github.com/go-ndn/exact"
 	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/ndn"
-	"github.com/go-ndn/tlv"
 )
 
 var (
@@ -20,7 +19,7 @@ var (
 
 	faceCreate = make(chan net.Conn)
 	reqSend    = make(chan *req)
-	faceClose  = make(chan *face)
+	faceClose  = make(chan uint64)
 
 	forwarded = exact.New()
 	fib       = lpm.New()
@@ -29,68 +28,6 @@ var (
 func newFaceID() (id uint64) {
 	lastFaceID++
 	return lastFaceID
-}
-
-func log(i ...interface{}) {
-	if !*debug {
-		return
-	}
-	fmt.Printf("[core] %s", fmt.Sprintln(i...))
-}
-
-func handleLocal() {
-	for _, rt := range localRoute {
-		reqRecv := make(chan *req)
-		addNextHop(lpm.Key(rt.url), reqRecv)
-		go func(rt route) {
-			for {
-				rq := <-reqRecv
-				var (
-					v interface{}
-					t uint64
-				)
-				if rt.handleCommand != nil {
-					// command
-					t = 101
-					cmd := new(ndn.Command)
-					tlv.Copy(&rq.interest.Name, cmd)
-					if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-						v = respNotAuthorized
-						goto REQ_DONE
-					}
-					timestamp = cmd.Timestamp
-					params := &cmd.Parameters.Parameters
-
-					var f *face
-					if params.FaceID == 0 {
-						f = rq.sender
-					} else {
-						var ok bool
-						f, ok = faces[params.FaceID]
-						if !ok {
-							v = respIncorrectParams
-							goto REQ_DONE
-						}
-					}
-
-					v = rt.handleCommand(params, f)
-				} else {
-					// dataset
-					t = 128
-					v = rt.handleDataset()
-				}
-
-			REQ_DONE:
-				d := &ndn.Data{Name: rq.interest.Name}
-				d.Content, _ = tlv.MarshalByte(v, t)
-				ch := make(chan *ndn.Data, 1)
-				ch <- d
-				close(ch)
-				rq.resp <- ch
-				close(rq.resp)
-			}
-		}(rt)
-	}
 }
 
 func run() {
@@ -102,26 +39,11 @@ func run() {
 	for {
 		select {
 		case conn := <-faceCreate:
-			ch := make(chan *ndn.Interest)
-			f := &face{
-				Face:         ndn.NewFace(conn, ch),
-				reqRecv:      make(chan *req),
-				interestRecv: ch,
-
-				id:    newFaceID(),
-				route: make(map[string]ndn.Route),
-			}
-			faces[f.id] = f
-			f.log("face created")
-			go f.run()
+			addFace(conn)
 		case rq := <-reqSend:
 			handleReq(rq)
-		case f := <-faceClose:
-			delete(faces, f.id)
-			for name := range f.route {
-				removeNextHop(ndn.NewName(name), f.reqRecv)
-			}
-			f.log("face removed")
+		case faceID := <-faceClose:
+			removeFace(faceID)
 		case <-quit:
 			log("goodbye")
 			return
@@ -129,7 +51,111 @@ func run() {
 	}
 }
 
-func addNextHop(name fmt.Stringer, ch chan<- *req) {
+func addFace(conn net.Conn) {
+	interestRecv := make(chan *ndn.Interest)
+	done := make(chan struct{})
+	reqRecv := make(chan *req)
+	dataRecv := make(chan *ndn.Data)
+
+	f := &face{
+		Face:    ndn.NewFace(conn, interestRecv),
+		reqRecv: reqRecv,
+
+		id:    newFaceID(),
+		route: make(map[string]ndn.Route),
+	}
+	faces[f.id] = f
+
+	// write
+	go func() {
+		for {
+			select {
+			case rq := <-reqRecv:
+				ch := f.SendInterest(rq.interest)
+				rq.resp <- ch
+				close(rq.resp)
+				f.log("forward", rq.interest.Name)
+			case d := <-dataRecv:
+				f.SendData(d)
+			case <-done:
+				return
+			}
+		}
+	}()
+
+	// read
+	go func() {
+		for i := range interestRecv {
+			resp := make(chan (<-chan *ndn.Data))
+			reqSend <- &req{
+				sender:   f,
+				interest: i,
+				resp:     resp,
+			}
+			for ch := range resp {
+				go func(ch <-chan *ndn.Data) {
+					select {
+					case d, ok := <-ch:
+						if !ok {
+							return
+						}
+						select {
+						case dataRecv <- d:
+						case <-done:
+						}
+					case <-done:
+					}
+				}(ch)
+			}
+		}
+		faceClose <- f.id
+		f.Close()
+		close(done)
+	}()
+	f.log("face created")
+}
+
+func handleReq(rq *req) {
+	fib.Match(rq.interest.Name.String(), func(v interface{}) {
+		interestID := fmt.Sprintf("%s/%x", rq.interest.Name, rq.interest.Nonce)
+		forwarded.Update(interestID, func(fw interface{}) interface{} {
+			if fw == nil {
+				for ch := range v.(map[chan<- *req]struct{}) {
+					resp := make(chan (<-chan *ndn.Data))
+					ch <- &req{
+						interest: rq.interest,
+						sender:   rq.sender,
+						resp:     resp,
+					}
+					ret, ok := <-resp
+					if ok {
+						rq.resp <- ret
+						break
+					}
+				}
+				go func() {
+					time.Sleep(time.Minute)
+					forwarded.Update(interestID, func(interface{}) interface{} { return nil })
+				}()
+			} else {
+				rq.sender.log("loop detected", interestID)
+			}
+			return struct{}{}
+		})
+	})
+	close(rq.resp)
+}
+
+func removeFace(faceID uint64) {
+	f := faces[faceID]
+	delete(faces, faceID)
+	for name := range f.route {
+		removeNextHop(name, f.reqRecv)
+	}
+	f.log("face removed")
+}
+
+func addNextHop(name string, ch chan<- *req) {
 	fib.Update(name, func(v interface{}) interface{} {
 		var m map[chan<- *req]struct{}
 		if v == nil {
@@ -142,7 +168,7 @@ func addNextHop(name fmt.Stringer, ch chan<- *req) {
 	}, false)
 }
 
-func removeNextHop(name fmt.Stringer, ch chan<- *req) {
+func removeNextHop(name string, ch chan<- *req) {
 	fib.Update(name, func(v interface{}) interface{} {
 		if v == nil {
 			return nil
@@ -156,35 +182,9 @@ func removeNextHop(name fmt.Stringer, ch chan<- *req) {
 	}, false)
 }
 
-func handleReq(rq *req) {
-	defer close(rq.resp)
-	v := fib.Match(rq.interest.Name)
-	if v == nil {
+func log(i ...interface{}) {
+	if !*debug {
 		return
 	}
-	key := exact.Key(fmt.Sprintf("%s/%x", rq.interest.Name, rq.interest.Nonce))
-	forwarded.Update(key, func(fw interface{}) interface{} {
-		if fw == nil {
-			for ch := range v.(map[chan<- *req]struct{}) {
-				resp := make(chan (<-chan *ndn.Data))
-				ch <- &req{
-					interest: rq.interest,
-					sender:   rq.sender,
-					resp:     resp,
-				}
-				ret, ok := <-resp
-				if ok {
-					rq.resp <- ret
-					break
-				}
-			}
-			go func() {
-				time.Sleep(time.Minute)
-				forwarded.Remove(key)
-			}()
-		} else {
-			rq.sender.log("loop detected", key)
-		}
-		return struct{}{}
-	})
+	fmt.Printf("[core] %s", fmt.Sprintln(i...))
 }
