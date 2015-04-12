@@ -64,8 +64,7 @@ func handleLocal() {
 		reqRecv := make(chan *req)
 		addNextHop(rt.url, reqRecv)
 		go func(rt route) {
-			for {
-				rq := <-reqRecv
+			for rq := range reqRecv {
 				var (
 					v interface{}
 					t uint64
