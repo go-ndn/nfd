@@ -98,17 +98,8 @@ func handleReq(rq *req) {
 		forwarded.Update(interestID, func(fw interface{}) interface{} {
 			if fw == nil {
 				for h := range v.(map[handler]struct{}) {
-					resp := make(chan (<-chan *ndn.Data), 1)
-					h.handleReq(&req{
-						interest: rq.interest,
-						sender:   rq.sender,
-						resp:     resp,
-					})
-					ret, ok := <-resp
-					if ok {
-						rq.resp <- ret
-						break
-					}
+					h.handleReq(rq)
+					break
 				}
 				go func() {
 					time.Sleep(time.Minute)

@@ -54,7 +54,6 @@ REQ_DONE:
 	ch <- d
 	close(ch)
 	rq.resp <- ch
-	close(rq.resp)
 }
 
 func handleLocal() {

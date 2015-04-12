@@ -22,7 +22,6 @@ func (f *face) log(i ...interface{}) {
 
 func (f *face) handleReq(rq *req) {
 	rq.resp <- f.SendInterest(rq.interest)
-	close(rq.resp)
 	f.log("forward", rq.interest.Name)
 }
 
