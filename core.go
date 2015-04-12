@@ -66,6 +66,24 @@ func addFace(conn net.Conn) {
 	// read
 	go func() {
 		for i := range interestRecv {
+			var cached *ndn.Data
+			ndn.ContentStore.Match(i.Name.String(), func(v interface{}) {
+				if v == nil {
+					return
+				}
+				name := i.Name.String()
+				for d, t := range v.(map[*ndn.Data]time.Time) {
+					if i.Selectors.Match(name, d, t) {
+						cached = d
+						break
+					}
+				}
+			})
+			if cached != nil {
+				f.SendData(cached)
+				continue
+			}
+
 			resp := make(chan (<-chan *ndn.Data))
 			reqSend <- &req{
 				sender:   f,
@@ -80,6 +98,16 @@ func addFace(conn net.Conn) {
 							return
 						}
 						f.SendData(d)
+						ndn.ContentStore.Update(d.Name.String(), func(v interface{}) interface{} {
+							var m map[*ndn.Data]time.Time
+							if v == nil {
+								m = make(map[*ndn.Data]time.Time)
+							} else {
+								m = v.(map[*ndn.Data]time.Time)
+							}
+							m[d] = time.Now()
+							return m
+						})
 					case <-stop:
 					}
 				}(ch)
