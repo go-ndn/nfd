@@ -8,7 +8,6 @@ import (
 
 type face struct {
 	*ndn.Face
-	reqRecv chan<- *req
 
 	id    uint64
 	route map[string]ndn.Route
@@ -19,6 +18,16 @@ func (f *face) log(i ...interface{}) {
 		return
 	}
 	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
+}
+
+func (f *face) handleReq(rq *req) {
+	rq.resp <- f.SendInterest(rq.interest)
+	close(rq.resp)
+	f.log("forward", rq.interest.Name)
+}
+
+type handler interface {
+	handleReq(*req)
 }
 
 type req struct {

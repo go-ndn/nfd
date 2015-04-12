@@ -53,35 +53,15 @@ func run() {
 
 func addFace(conn net.Conn) {
 	interestRecv := make(chan *ndn.Interest)
-	done := make(chan struct{})
-	reqRecv := make(chan *req)
-	dataRecv := make(chan *ndn.Data)
+	stop := make(chan struct{})
 
 	f := &face{
-		Face:    ndn.NewFace(conn, interestRecv),
-		reqRecv: reqRecv,
+		Face: ndn.NewFace(conn, interestRecv),
 
 		id:    newFaceID(),
 		route: make(map[string]ndn.Route),
 	}
 	faces[f.id] = f
-
-	// write
-	go func() {
-		for {
-			select {
-			case rq := <-reqRecv:
-				ch := f.SendInterest(rq.interest)
-				rq.resp <- ch
-				close(rq.resp)
-				f.log("forward", rq.interest.Name)
-			case d := <-dataRecv:
-				f.SendData(d)
-			case <-done:
-				return
-			}
-		}
-	}()
 
 	// read
 	go func() {
@@ -99,18 +79,15 @@ func addFace(conn net.Conn) {
 						if !ok {
 							return
 						}
-						select {
-						case dataRecv <- d:
-						case <-done:
-						}
-					case <-done:
+						f.SendData(d)
+					case <-stop:
 					}
 				}(ch)
 			}
 		}
 		faceClose <- f.id
 		f.Close()
-		close(done)
+		close(stop)
 	}()
 	f.log("face created")
 }
@@ -120,13 +97,13 @@ func handleReq(rq *req) {
 		interestID := fmt.Sprintf("%s/%x", rq.interest.Name, rq.interest.Nonce)
 		forwarded.Update(interestID, func(fw interface{}) interface{} {
 			if fw == nil {
-				for ch := range v.(map[chan<- *req]struct{}) {
-					resp := make(chan (<-chan *ndn.Data))
-					ch <- &req{
+				for h := range v.(map[handler]struct{}) {
+					resp := make(chan (<-chan *ndn.Data), 1)
+					h.handleReq(&req{
 						interest: rq.interest,
 						sender:   rq.sender,
 						resp:     resp,
-					}
+					})
 					ret, ok := <-resp
 					if ok {
 						rq.resp <- ret
@@ -150,31 +127,31 @@ func removeFace(faceID uint64) {
 	f := faces[faceID]
 	delete(faces, faceID)
 	for name := range f.route {
-		removeNextHop(name, f.reqRecv)
+		removeNextHop(name, f)
 	}
 	f.log("face removed")
 }
 
-func addNextHop(name string, ch chan<- *req) {
+func addNextHop(name string, h handler) {
 	fib.Update(name, func(v interface{}) interface{} {
-		var m map[chan<- *req]struct{}
+		var m map[handler]struct{}
 		if v == nil {
-			m = make(map[chan<- *req]struct{})
+			m = make(map[handler]struct{})
 		} else {
-			m = v.(map[chan<- *req]struct{})
+			m = v.(map[handler]struct{})
 		}
-		m[ch] = struct{}{}
+		m[h] = struct{}{}
 		return m
 	}, false)
 }
 
-func removeNextHop(name string, ch chan<- *req) {
+func removeNextHop(name string, h handler) {
 	fib.Update(name, func(v interface{}) interface{} {
 		if v == nil {
 			return nil
 		}
-		m := v.(map[chan<- *req]struct{})
-		delete(m, ch)
+		m := v.(map[handler]struct{})
+		delete(m, h)
 		if len(m) == 0 {
 			return nil
 		}

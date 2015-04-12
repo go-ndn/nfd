@@ -11,8 +11,54 @@ type route struct {
 	handleDataset func() interface{}
 }
 
-var (
-	localRoute = []route{
+func (rt *route) handleReq(rq *req) {
+	var (
+		v interface{}
+		t uint64
+	)
+	if rt.handleCommand != nil {
+		// command
+		cmd := new(ndn.Command)
+		tlv.Copy(&rq.interest.Name, cmd)
+		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
+			v = respNotAuthorized
+			goto REQ_DONE
+		}
+		timestamp = cmd.Timestamp
+		params := &cmd.Parameters.Parameters
+
+		var f *face
+		if params.FaceID == 0 {
+			f = rq.sender
+		} else {
+			var ok bool
+			f, ok = faces[params.FaceID]
+			if !ok {
+				v = respIncorrectParams
+				goto REQ_DONE
+			}
+		}
+
+		t = 101
+		v = rt.handleCommand(params, f)
+	} else {
+		// dataset
+		t = 128
+		v = rt.handleDataset()
+	}
+
+REQ_DONE:
+	d := &ndn.Data{Name: rq.interest.Name}
+	d.Content, _ = tlv.MarshalByte(v, t)
+	ch := make(chan *ndn.Data, 1)
+	ch <- d
+	close(ch)
+	rq.resp <- ch
+	close(rq.resp)
+}
+
+func handleLocal() {
+	for _, rt := range []*route{
 		{
 			url: "/localhost/nfd/rib/register",
 			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
@@ -21,7 +67,7 @@ var (
 					Origin: params.Origin,
 					Cost:   params.Cost,
 				}
-				addNextHop(params.Name.String(), f.reqRecv)
+				addNextHop(params.Name.String(), f)
 				return respOK
 			},
 		},
@@ -30,7 +76,7 @@ var (
 			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
 				f.log("rib/unregister")
 				delete(f.route, params.Name.String())
-				removeNextHop(params.Name.String(), f.reqRecv)
+				removeNextHop(params.Name.String(), f)
 				return respOK
 			},
 		},
@@ -56,59 +102,7 @@ var (
 				return routes
 			},
 		},
-	}
-)
-
-func handleLocal() {
-	for _, rt := range localRoute {
-		reqRecv := make(chan *req)
-		addNextHop(rt.url, reqRecv)
-		go func(rt route) {
-			for rq := range reqRecv {
-				var (
-					v interface{}
-					t uint64
-				)
-				if rt.handleCommand != nil {
-					// command
-					t = 101
-					cmd := new(ndn.Command)
-					tlv.Copy(&rq.interest.Name, cmd)
-					if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-						v = respNotAuthorized
-						goto REQ_DONE
-					}
-					timestamp = cmd.Timestamp
-					params := &cmd.Parameters.Parameters
-
-					var f *face
-					if params.FaceID == 0 {
-						f = rq.sender
-					} else {
-						var ok bool
-						f, ok = faces[params.FaceID]
-						if !ok {
-							v = respIncorrectParams
-							goto REQ_DONE
-						}
-					}
-
-					v = rt.handleCommand(params, f)
-				} else {
-					// dataset
-					t = 128
-					v = rt.handleDataset()
-				}
-
-			REQ_DONE:
-				d := &ndn.Data{Name: rq.interest.Name}
-				d.Content, _ = tlv.MarshalByte(v, t)
-				ch := make(chan *ndn.Data, 1)
-				ch <- d
-				close(ch)
-				rq.resp <- ch
-				close(rq.resp)
-			}
-		}(rt)
+	} {
+		addNextHop(rt.url, rt)
 	}
 }
