@@ -34,14 +34,12 @@ BurstyForward: N pairs of consumer and producer directly connect to forwarder. A
 ForwardRTT: 1 consumer and 1 producer directly connect to forwarder. The timer measures the RTT of interests.
 
 ```
-BurstyForward
-go-nfd: 37018602 ns/op
-nfd: 371395840 ns/op
-go-nfd is 10x faster
+go-nfd
+BenchmarkBurstyForward     100  20482775 ns/op
+BenchmarkForwardRTT    3000    791010 ns/op
 
-ForwardRTT
-go-nfd: 900541 ns/op
-nfd: 6351451 ns/op
-go-nfd is 7x faster
+nfd
+BenchmarkBurstyForward       5 335053224 ns/op
+BenchmarkForwardRTT     3000   5754393 ns/op
 ```
 
