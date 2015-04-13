@@ -5,18 +5,18 @@ import (
 	"github.com/go-ndn/tlv"
 )
 
-type route struct {
+type service struct {
 	url           string
 	handleCommand func(*ndn.Parameters, *face) *ndn.ControlResponse
 	handleDataset func() interface{}
 }
 
-func (rt *route) handle(req *request) {
+func (s *service) handle(req *request) {
 	var (
 		v interface{}
 		t uint64
 	)
-	if rt.handleCommand != nil {
+	if s.handleCommand != nil {
 		// command
 		cmd := new(ndn.Command)
 		tlv.Copy(&req.interest.Name, cmd)
@@ -40,11 +40,11 @@ func (rt *route) handle(req *request) {
 		}
 
 		t = 101
-		v = rt.handleCommand(params, f)
+		v = s.handleCommand(params, f)
 	} else {
 		// dataset
 		t = 128
-		v = rt.handleDataset()
+		v = s.handleDataset()
 	}
 
 REQ_DONE:
@@ -57,7 +57,7 @@ REQ_DONE:
 }
 
 func handleLocal() {
-	for _, rt := range []*route{
+	for _, s := range []*service{
 		{
 			url: "/localhost/nfd/rib/register",
 			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
@@ -102,6 +102,6 @@ func handleLocal() {
 			},
 		},
 	} {
-		addNextHop(rt.url, rt)
+		addNextHop(s.url, s)
 	}
 }
