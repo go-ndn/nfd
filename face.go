@@ -24,13 +24,3 @@ func (f *face) handleReq(rq *req) {
 	rq.resp <- f.SendInterest(rq.interest)
 	f.log("forward", rq.interest.Name)
 }
-
-type handler interface {
-	handleReq(*req)
-}
-
-type req struct {
-	sender   *face
-	interest *ndn.Interest
-	resp     chan<- (<-chan *ndn.Data)
-}
