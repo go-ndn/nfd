@@ -20,7 +20,7 @@ func (f *face) log(i ...interface{}) {
 	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
 }
 
-func (f *face) handleReq(rq *req) {
-	rq.resp <- f.SendInterest(rq.interest)
-	f.log("forward", rq.interest.Name)
+func (f *face) handle(req *request) {
+	req.resp <- f.SendInterest(req.interest)
+	f.log("forward", req.interest.Name)
 }

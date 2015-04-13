@@ -18,7 +18,7 @@ var (
 	faces      = make(map[uint64]*face)
 
 	faceCreate = make(chan net.Conn)
-	reqSend    = make(chan *req)
+	reqSend    = make(chan *request)
 	faceClose  = make(chan uint64)
 
 	forwarded = exact.New()
@@ -40,8 +40,8 @@ func run() {
 		select {
 		case conn := <-faceCreate:
 			addFace(conn)
-		case rq := <-reqSend:
-			handleReq(rq)
+		case req := <-reqSend:
+			handle(req)
 		case faceID := <-faceClose:
 			removeFace(faceID)
 		case <-quit:
@@ -80,7 +80,7 @@ func addFace(conn net.Conn) {
 
 			// forward
 			resp := make(chan (<-chan *ndn.Data))
-			reqSend <- &req{
+			reqSend <- &request{
 				sender:   f,
 				interest: i,
 				resp:     resp,
@@ -150,14 +150,14 @@ func checkLoop(interestID string) (loop bool) {
 	return
 }
 
-func handleReq(rq *req) {
-	fib.Match(rq.interest.Name.String(), func(v interface{}) {
+func handle(req *request) {
+	fib.Match(req.interest.Name.String(), func(v interface{}) {
 		for h := range v.(map[handler]struct{}) {
-			h.handleReq(rq)
+			h.handle(req)
 			break
 		}
 	})
-	close(rq.resp)
+	close(req.resp)
 }
 
 func removeFace(faceID uint64) {

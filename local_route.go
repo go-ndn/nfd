@@ -11,7 +11,7 @@ type route struct {
 	handleDataset func() interface{}
 }
 
-func (rt *route) handleReq(rq *req) {
+func (rt *route) handle(req *request) {
 	var (
 		v interface{}
 		t uint64
@@ -19,7 +19,7 @@ func (rt *route) handleReq(rq *req) {
 	if rt.handleCommand != nil {
 		// command
 		cmd := new(ndn.Command)
-		tlv.Copy(&rq.interest.Name, cmd)
+		tlv.Copy(&req.interest.Name, cmd)
 		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
 			v = respNotAuthorized
 			goto REQ_DONE
@@ -29,7 +29,7 @@ func (rt *route) handleReq(rq *req) {
 
 		var f *face
 		if params.FaceID == 0 {
-			f = rq.sender
+			f = req.sender
 		} else {
 			var ok bool
 			f, ok = faces[params.FaceID]
@@ -48,12 +48,12 @@ func (rt *route) handleReq(rq *req) {
 	}
 
 REQ_DONE:
-	d := &ndn.Data{Name: rq.interest.Name}
+	d := &ndn.Data{Name: req.interest.Name}
 	d.Content, _ = tlv.MarshalByte(v, t)
 	ch := make(chan *ndn.Data, 1)
 	ch <- d
 	close(ch)
-	rq.resp <- ch
+	req.resp <- ch
 }
 
 func handleLocal() {
