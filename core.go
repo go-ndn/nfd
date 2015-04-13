@@ -63,27 +63,22 @@ func addFace(conn net.Conn) {
 	}
 	faces[f.id] = f
 
-	// read
 	go func() {
 		for i := range interestRecv {
-			var cached *ndn.Data
-			ndn.ContentStore.Match(i.Name.String(), func(v interface{}) {
-				if v == nil {
-					return
-				}
-				name := i.Name.String()
-				for d, t := range v.(map[*ndn.Data]time.Time) {
-					if i.Selectors.Match(name, d, t) {
-						cached = d
-						break
-					}
-				}
-			})
-			if cached != nil {
-				f.SendData(cached)
+			// detect loop
+			interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
+			if checkLoop(interestID) {
+				f.log("loop detected", interestID)
 				continue
 			}
 
+			cache := getCache(i)
+			if cache != nil {
+				f.SendData(cache)
+				continue
+			}
+
+			// forward
 			resp := make(chan (<-chan *ndn.Data))
 			reqSend <- &req{
 				sender:   f,
@@ -98,16 +93,7 @@ func addFace(conn net.Conn) {
 							return
 						}
 						f.SendData(d)
-						ndn.ContentStore.Update(d.Name.String(), func(v interface{}) interface{} {
-							var m map[*ndn.Data]time.Time
-							if v == nil {
-								m = make(map[*ndn.Data]time.Time)
-							} else {
-								m = v.(map[*ndn.Data]time.Time)
-							}
-							m[d] = time.Now()
-							return m
-						})
+						addCache(d)
 					case <-stop:
 					}
 				}(ch)
@@ -120,24 +106,56 @@ func addFace(conn net.Conn) {
 	f.log("face created")
 }
 
+func addCache(d *ndn.Data) {
+	ndn.ContentStore.Update(d.Name.String(), func(v interface{}) interface{} {
+		var m map[*ndn.Data]time.Time
+		if v == nil {
+			m = make(map[*ndn.Data]time.Time)
+		} else {
+			m = v.(map[*ndn.Data]time.Time)
+		}
+		m[d] = time.Now()
+		return m
+	})
+}
+
+func getCache(i *ndn.Interest) (cache *ndn.Data) {
+	ndn.ContentStore.Match(i.Name.String(), func(v interface{}) {
+		if v == nil {
+			return
+		}
+		name := i.Name.String()
+		for d, t := range v.(map[*ndn.Data]time.Time) {
+			if i.Selectors.Match(name, d, t) {
+				cache = d
+				break
+			}
+		}
+	})
+	return
+}
+
+func checkLoop(interestID string) (loop bool) {
+	forwarded.Update(interestID, func(fw interface{}) interface{} {
+		if fw == nil {
+			go func() {
+				time.Sleep(time.Minute)
+				forwarded.Update(interestID, func(interface{}) interface{} { return nil })
+			}()
+		} else {
+			loop = true
+		}
+		return struct{}{}
+	})
+	return
+}
+
 func handleReq(rq *req) {
 	fib.Match(rq.interest.Name.String(), func(v interface{}) {
-		interestID := fmt.Sprintf("%s/%x", rq.interest.Name, rq.interest.Nonce)
-		forwarded.Update(interestID, func(fw interface{}) interface{} {
-			if fw == nil {
-				for h := range v.(map[handler]struct{}) {
-					h.handleReq(rq)
-					break
-				}
-				go func() {
-					time.Sleep(time.Minute)
-					forwarded.Update(interestID, func(interface{}) interface{} { return nil })
-				}()
-			} else {
-				rq.sender.log("loop detected", interestID)
-			}
-			return struct{}{}
-		})
+		for h := range v.(map[handler]struct{}) {
+			h.handleReq(rq)
+			break
+		}
 	})
 	close(rq.resp)
 }
