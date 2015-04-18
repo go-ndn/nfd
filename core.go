@@ -72,7 +72,7 @@ func addFace(conn net.Conn) {
 				continue
 			}
 
-			cache := getCache(i)
+			cache := ndn.ContentStore.Get(i)
 			if cache != nil {
 				f.SendData(cache)
 				continue
@@ -93,7 +93,7 @@ func addFace(conn net.Conn) {
 							return
 						}
 						f.SendData(d)
-						addCache(d)
+						ndn.ContentStore.Add(d)
 					case <-stop:
 					}
 				}(ch)
@@ -104,35 +104,6 @@ func addFace(conn net.Conn) {
 		close(stop)
 	}()
 	f.log("face created")
-}
-
-func addCache(d *ndn.Data) {
-	ndn.ContentStore.Update(d.Name.String(), func(v interface{}) interface{} {
-		var m map[*ndn.Data]time.Time
-		if v == nil {
-			m = make(map[*ndn.Data]time.Time)
-		} else {
-			m = v.(map[*ndn.Data]time.Time)
-		}
-		m[d] = time.Now()
-		return m
-	})
-}
-
-func getCache(i *ndn.Interest) (cache *ndn.Data) {
-	ndn.ContentStore.Match(i.Name.String(), func(v interface{}) {
-		if v == nil {
-			return
-		}
-		name := i.Name.String()
-		for d, t := range v.(map[*ndn.Data]time.Time) {
-			if i.Selectors.Match(name, d, t) {
-				cache = d
-				break
-			}
-		}
-	})
-	return
 }
 
 func checkLoop(interestID string) (loop bool) {
