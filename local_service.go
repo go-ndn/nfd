@@ -62,11 +62,12 @@ func handleLocal() {
 			url: "/localhost/nfd/rib/register",
 			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
 				f.log("rib/register")
-				f.route[params.Name.String()] = ndn.Route{
+				name := params.Name.String()
+				f.route[name] = ndn.Route{
 					Origin: params.Origin,
 					Cost:   params.Cost,
 				}
-				addNextHop(params.Name.String(), f)
+				addNextHop(name, f)
 				return respOK
 			},
 		},
@@ -74,8 +75,9 @@ func handleLocal() {
 			url: "/localhost/nfd/rib/unregister",
 			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
 				f.log("rib/unregister")
-				delete(f.route, params.Name.String())
-				removeNextHop(params.Name.String(), f)
+				name := params.Name.String()
+				delete(f.route, name)
+				removeNextHop(name, f)
 				return respOK
 			},
 		},
