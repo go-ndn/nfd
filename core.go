@@ -92,7 +92,7 @@ func addFace(conn net.Conn) {
 						if !ok {
 							return
 						}
-						f.log("recv", d.Name)
+						f.log("receive", d.Name)
 						f.SendData(d)
 						ndn.ContentStore.Add(d)
 					case <-stop:
