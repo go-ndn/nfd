@@ -136,13 +136,13 @@ func removeFace(faceID uint64) {
 	f := faces[faceID]
 	delete(faces, faceID)
 	for name := range f.route {
-		removeNextHop(name, f)
+		removeNextHop(name, f, true)
 	}
 	f.log("face removed")
 }
 
-func addNextHop(name string, h handler) {
-	fib.Update(name, func(v interface{}) interface{} {
+func addNextHop(name string, h handler, childInherit bool) {
+	updater := func(v interface{}) interface{} {
 		var m map[handler]struct{}
 		if v == nil {
 			m = make(map[handler]struct{})
@@ -151,11 +151,18 @@ func addNextHop(name string, h handler) {
 		}
 		m[h] = struct{}{}
 		return m
-	}, false)
+	}
+	if childInherit {
+		fib.UpdateAll(name, func(_ string, v interface{}) interface{} {
+			return updater(v)
+		}, false)
+	} else {
+		fib.Update(name, updater, false)
+	}
 }
 
-func removeNextHop(name string, h handler) {
-	fib.Update(name, func(v interface{}) interface{} {
+func removeNextHop(name string, h handler, childInherit bool) {
+	updater := func(v interface{}) interface{} {
 		if v == nil {
 			return nil
 		}
@@ -165,7 +172,14 @@ func removeNextHop(name string, h handler) {
 			return nil
 		}
 		return m
-	}, false)
+	}
+	if childInherit {
+		fib.UpdateAll(name, func(_ string, v interface{}) interface{} {
+			return updater(v)
+		}, false)
+	} else {
+		fib.Update(name, updater, false)
+	}
 }
 
 func log(i ...interface{}) {

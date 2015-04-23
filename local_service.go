@@ -66,8 +66,9 @@ func handleLocal() {
 				f.route[name] = ndn.Route{
 					Origin: params.Origin,
 					Cost:   params.Cost,
+					Flags:  params.Flags,
 				}
-				addNextHop(name, f)
+				addNextHop(name, f, params.Flags&ndn.FlagChildInherit != 0)
 				return respOK
 			},
 		},
@@ -77,7 +78,7 @@ func handleLocal() {
 				f.log("rib/unregister")
 				name := params.Name.String()
 				delete(f.route, name)
-				removeNextHop(name, f)
+				removeNextHop(name, f, true)
 				return respOK
 			},
 		},
@@ -104,6 +105,6 @@ func handleLocal() {
 			},
 		},
 	} {
-		addNextHop(s.url, s)
+		addNextHop(s.url, s, false)
 	}
 }
