@@ -7,22 +7,19 @@ import (
 
 type service struct {
 	url           string
-	handleCommand func(*ndn.Parameters, *face) *ndn.ControlResponse
+	handleCommand func(*ndn.Parameters, *face)
 	handleDataset func() interface{}
 }
 
 func (s *service) handle(req *request) {
-	var (
-		v interface{}
-		t uint64
-	)
 	if s.handleCommand != nil {
 		// command
+		t := uint64(101)
 		cmd := new(ndn.Command)
 		tlv.Copy(&req.interest.Name, cmd)
 		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-			v = respNotAuthorized
-			goto REQ_DONE
+			respond(req, respNotAuthorized, t)
+			return
 		}
 		timestamp = cmd.Timestamp
 		params := &cmd.Parameters.Parameters
@@ -34,20 +31,20 @@ func (s *service) handle(req *request) {
 			var ok bool
 			f, ok = faces[params.FaceID]
 			if !ok {
-				v = respIncorrectParams
-				goto REQ_DONE
+				respond(req, respIncorrectParams, t)
+				return
 			}
 		}
+		respond(req, respOK, t)
 
-		t = 101
-		v = s.handleCommand(params, f)
+		s.handleCommand(params, f)
 	} else {
 		// dataset
-		t = 128
-		v = s.handleDataset()
+		respond(req, s.handleDataset(), 128)
 	}
+}
 
-REQ_DONE:
+func respond(req *request, v interface{}, t uint64) {
 	d := &ndn.Data{Name: req.interest.Name}
 	d.Content, _ = tlv.MarshalByte(v, t)
 	ch := make(chan *ndn.Data, 1)
@@ -60,7 +57,7 @@ func handleLocal() {
 	for _, s := range []*service{
 		{
 			url: "/localhost/nfd/rib/register",
-			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
+			handleCommand: func(params *ndn.Parameters, f *face) {
 				f.log("rib/register")
 				name := params.Name.String()
 				f.route[name] = ndn.Route{
@@ -69,17 +66,15 @@ func handleLocal() {
 					Flags:  params.Flags,
 				}
 				addNextHop(name, f, params.Flags&ndn.FlagChildInherit != 0)
-				return respOK
 			},
 		},
 		{
 			url: "/localhost/nfd/rib/unregister",
-			handleCommand: func(params *ndn.Parameters, f *face) *ndn.ControlResponse {
+			handleCommand: func(params *ndn.Parameters, f *face) {
 				f.log("rib/unregister")
 				name := params.Name.String()
 				delete(f.route, name)
 				removeNextHop(name, f, true)
-				return respOK
 			},
 		},
 		{

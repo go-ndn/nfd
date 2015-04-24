@@ -21,8 +21,7 @@ func newConfig(file string) (conf *config, err error) {
 		return
 	}
 	defer f.Close()
-	dec := json.NewDecoder(f)
 	conf = new(config)
-	err = dec.Decode(conf)
+	err = json.NewDecoder(f).Decode(conf)
 	return
 }
