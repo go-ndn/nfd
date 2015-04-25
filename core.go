@@ -5,10 +5,10 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 	"time"
 
-	"github.com/go-ndn/exact"
 	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/ndn"
 )
@@ -21,8 +21,10 @@ var (
 	reqSend    = make(chan *request)
 	faceClose  = make(chan uint64)
 
-	forwarded = exact.New()
-	fib       = lpm.New()
+	forwarded = make(map[string]struct{})
+	mu        sync.Mutex
+
+	fib = lpm.New()
 )
 
 func newFaceID() (id uint64) {
@@ -108,17 +110,19 @@ func addFace(conn net.Conn) {
 }
 
 func checkLoop(interestID string) (loop bool) {
-	forwarded.Update(interestID, func(fw interface{}) interface{} {
-		if fw == nil {
-			go func() {
-				time.Sleep(time.Minute)
-				forwarded.Update(interestID, func(interface{}) interface{} { return nil })
-			}()
-		} else {
-			loop = true
-		}
-		return struct{}{}
-	})
+	mu.Lock()
+	if _, ok := forwarded[interestID]; ok {
+		loop = true
+	} else {
+		forwarded[interestID] = struct{}{}
+		go func() {
+			time.Sleep(time.Minute)
+			mu.Lock()
+			delete(forwarded, interestID)
+			mu.Unlock()
+		}()
+	}
+	mu.Unlock()
 	return
 }
 
@@ -128,7 +132,7 @@ func handle(req *request) {
 			h.handle(req)
 			break
 		}
-	})
+	}, true)
 	close(req.resp)
 }
 
