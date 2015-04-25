@@ -9,7 +9,6 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/ndn"
 )
 
@@ -17,15 +16,20 @@ var (
 	lastFaceID = uint64(255)
 	faces      = make(map[uint64]*face)
 
-	faceCreate = make(chan net.Conn)
 	reqSend    = make(chan *request)
+	faceCreate = make(chan net.Conn)
 	faceClose  = make(chan uint64)
 
 	forwarded = make(map[string]struct{})
 	mu        sync.Mutex
 
-	fib = lpm.New()
+	nextHop = newFIB()
 )
+
+type request struct {
+	sender   *face
+	interest *ndn.Interest
+}
 
 func newFaceID() (id uint64) {
 	lastFaceID++
@@ -33,6 +37,8 @@ func newFaceID() (id uint64) {
 }
 
 func run() {
+	handleLocal()
+
 	log("start")
 
 	quit := make(chan os.Signal)
@@ -42,10 +48,10 @@ func run() {
 		select {
 		case conn := <-faceCreate:
 			addFace(conn)
-		case req := <-reqSend:
-			handle(req)
 		case faceID := <-faceClose:
 			removeFace(faceID)
+		case req := <-reqSend:
+			nextHop.ServeNDN(req.sender, req.interest)
 		case <-quit:
 			log("goodbye")
 			return
@@ -53,9 +59,25 @@ func run() {
 	}
 }
 
+func checkLoop(i *ndn.Interest) bool {
+	mu.Lock()
+	defer mu.Unlock()
+	interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
+	if _, ok := forwarded[interestID]; ok {
+		return true
+	}
+	forwarded[interestID] = struct{}{}
+	go func() {
+		time.Sleep(time.Minute)
+		mu.Lock()
+		delete(forwarded, interestID)
+		mu.Unlock()
+	}()
+	return false
+}
+
 func addFace(conn net.Conn) {
 	interestRecv := make(chan *ndn.Interest)
-	stop := make(chan struct{})
 
 	f := &face{
 		Face: ndn.NewFace(conn, interestRecv),
@@ -67,10 +89,7 @@ func addFace(conn net.Conn) {
 
 	go func() {
 		for i := range interestRecv {
-			// detect loop
-			interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
-			if checkLoop(interestID) {
-				f.log("loop detected", interestID)
+			if checkLoop(i) {
 				continue
 			}
 
@@ -80,110 +99,24 @@ func addFace(conn net.Conn) {
 				continue
 			}
 
-			// forward
-			resp := make(chan (<-chan *ndn.Data))
 			reqSend <- &request{
 				sender:   f,
 				interest: i,
-				resp:     resp,
-			}
-			for ch := range resp {
-				go func(ch <-chan *ndn.Data) {
-					select {
-					case d, ok := <-ch:
-						if !ok {
-							return
-						}
-						f.log("receive", d.Name)
-						f.SendData(d)
-						ndn.ContentStore.Add(d)
-					case <-stop:
-					}
-				}(ch)
 			}
 		}
 		faceClose <- f.id
 		f.Close()
-		close(stop)
 	}()
 	f.log("face created")
-}
-
-func checkLoop(interestID string) (loop bool) {
-	mu.Lock()
-	if _, ok := forwarded[interestID]; ok {
-		loop = true
-	} else {
-		forwarded[interestID] = struct{}{}
-		go func() {
-			time.Sleep(time.Minute)
-			mu.Lock()
-			delete(forwarded, interestID)
-			mu.Unlock()
-		}()
-	}
-	mu.Unlock()
-	return
-}
-
-func handle(req *request) {
-	fib.Match(req.interest.Name.String(), func(v interface{}) {
-		for h := range v.(map[handler]struct{}) {
-			h.handle(req)
-			break
-		}
-	}, true)
-	close(req.resp)
 }
 
 func removeFace(faceID uint64) {
 	f := faces[faceID]
 	delete(faces, faceID)
 	for name := range f.route {
-		removeNextHop(name, f, true)
+		nextHop.remove(name, f, true)
 	}
 	f.log("face removed")
-}
-
-func addNextHop(name string, h handler, childInherit bool) {
-	updater := func(v interface{}) interface{} {
-		var m map[handler]struct{}
-		if v == nil {
-			m = make(map[handler]struct{})
-		} else {
-			m = v.(map[handler]struct{})
-		}
-		m[h] = struct{}{}
-		return m
-	}
-	if childInherit {
-		fib.UpdateAll(name, func(_ string, v interface{}) interface{} {
-			return updater(v)
-		}, false)
-	} else {
-		fib.Update(name, updater, false)
-	}
-}
-
-func removeNextHop(name string, h handler, childInherit bool) {
-	updater := func(v interface{}) interface{} {
-		if v == nil {
-			return nil
-		}
-		m := v.(map[handler]struct{})
-		delete(m, h)
-		if len(m) == 0 {
-			return nil
-		}
-		return m
-	}
-	if childInherit {
-		fib.UpdateAll(name, func(_ string, v interface{}) interface{} {
-			return updater(v)
-		}, false)
-	} else {
-		fib.Update(name, updater, false)
-	}
 }
 
 func log(i ...interface{}) {

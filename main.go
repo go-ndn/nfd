@@ -61,6 +61,5 @@ func main() {
 		}(u)
 	}
 
-	handleLocal()
 	run()
 }

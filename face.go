@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 )
 
@@ -20,7 +21,14 @@ func (f *face) log(i ...interface{}) {
 	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
 }
 
-func (f *face) handle(req *request) {
-	req.resp <- f.SendInterest(req.interest)
-	f.log("forward", req.interest.Name)
+func (f *face) ServeNDN(w mux.Sender, i *ndn.Interest) {
+	go func() {
+		d, ok := <-f.SendInterest(i)
+		if !ok {
+			return
+		}
+		f.log("receive", d.Name)
+		w.SendData(d)
+		ndn.ContentStore.Add(d)
+	}()
 }

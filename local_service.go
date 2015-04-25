@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/tlv"
 )
@@ -11,14 +12,19 @@ type service struct {
 	handleDataset func() interface{}
 }
 
-func (s *service) handle(req *request) {
+func (s *service) ServeNDN(w mux.Sender, i *ndn.Interest) {
+	respond := func(v interface{}, t uint64) {
+		d := &ndn.Data{Name: i.Name}
+		d.Content, _ = tlv.MarshalByte(v, t)
+		w.SendData(d)
+	}
 	if s.handleCommand != nil {
 		// command
 		t := uint64(101)
 		cmd := new(ndn.Command)
-		tlv.Copy(&req.interest.Name, cmd)
+		tlv.Copy(&i.Name, cmd)
 		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-			respond(req, respNotAuthorized, t)
+			respond(respNotAuthorized, t)
 			return
 		}
 		timestamp = cmd.Timestamp
@@ -26,31 +32,22 @@ func (s *service) handle(req *request) {
 
 		var f *face
 		if params.FaceID == 0 {
-			f = req.sender
+			f = w.(*face)
 		} else {
 			var ok bool
 			f, ok = faces[params.FaceID]
 			if !ok {
-				respond(req, respIncorrectParams, t)
+				respond(respIncorrectParams, t)
 				return
 			}
 		}
-		respond(req, respOK, t)
+		respond(respOK, t)
 
 		s.handleCommand(params, f)
 	} else {
 		// dataset
-		respond(req, s.handleDataset(), 128)
+		respond(s.handleDataset(), 128)
 	}
-}
-
-func respond(req *request, v interface{}, t uint64) {
-	d := &ndn.Data{Name: req.interest.Name}
-	d.Content, _ = tlv.MarshalByte(v, t)
-	ch := make(chan *ndn.Data, 1)
-	ch <- d
-	close(ch)
-	req.resp <- ch
 }
 
 func handleLocal() {
@@ -65,7 +62,7 @@ func handleLocal() {
 					Cost:   params.Cost,
 					Flags:  params.Flags,
 				}
-				addNextHop(name, f, params.Flags&ndn.FlagChildInherit != 0)
+				nextHop.add(name, f, params.Flags&ndn.FlagChildInherit != 0)
 			},
 		},
 		{
@@ -74,7 +71,7 @@ func handleLocal() {
 				f.log("rib/unregister")
 				name := params.Name.String()
 				delete(f.route, name)
-				removeNextHop(name, f, true)
+				nextHop.remove(name, f, true)
 			},
 		},
 		{
@@ -100,6 +97,6 @@ func handleLocal() {
 			},
 		},
 	} {
-		addNextHop(s.url, s, false)
+		nextHop.add(s.url, s, false)
 	}
 }
