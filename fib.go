@@ -7,15 +7,15 @@ import (
 )
 
 type fib struct {
-	m lpm.Matcher
+	lpm.Matcher
 }
 
 func newFIB() *fib {
-	return &fib{m: lpm.New()}
+	return &fib{Matcher: lpm.New()}
 }
 
 func (f *fib) ServeNDN(w mux.Sender, i *ndn.Interest) {
-	f.m.Match(i.Name.String(), func(v interface{}) {
+	f.Match(i.Name.String(), func(v interface{}) {
 		for h := range v.(map[mux.Handler]struct{}) {
 			log("forward", i.Name)
 			h.ServeNDN(w, i)
@@ -36,11 +36,11 @@ func (f *fib) add(name string, h mux.Handler, childInherit bool) {
 		return m
 	}
 	if childInherit {
-		f.m.UpdateAll(name, func(_ string, v interface{}) interface{} {
+		f.UpdateAll(name, func(_ string, v interface{}) interface{} {
 			return updater(v)
 		}, false)
 	} else {
-		f.m.Update(name, updater, false)
+		f.Update(name, updater, false)
 	}
 }
 
@@ -57,10 +57,10 @@ func (f *fib) remove(name string, h mux.Handler, childInherit bool) {
 		return m
 	}
 	if childInherit {
-		f.m.UpdateAll(name, func(_ string, v interface{}) interface{} {
+		f.UpdateAll(name, func(_ string, v interface{}) interface{} {
 			return updater(v)
 		}, false)
 	} else {
-		f.m.Update(name, updater, false)
+		f.Update(name, updater, false)
 	}
 }
