@@ -29,6 +29,5 @@ func (f *face) ServeNDN(w mux.Sender, i *ndn.Interest) {
 		}
 		f.log("receive", d.Name)
 		w.SendData(d)
-		ndn.ContentStore.Add(d)
 	}()
 }

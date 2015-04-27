@@ -30,16 +30,28 @@ func (s *service) ServeNDN(w mux.Sender, i *ndn.Interest) {
 		timestamp = cmd.Timestamp
 		params := &cmd.Parameters.Parameters
 
-		var f *face
+		var (
+			f  *face
+			ok bool
+		)
 		if params.FaceID == 0 {
-			f = w.(*face)
-		} else {
-			var ok bool
-			f, ok = faces[params.FaceID]
-			if !ok {
-				respond(respIncorrectParams, t)
-				return
+			for {
+				f, ok = w.(*face)
+				if ok {
+					break
+				}
+				if h, ok := w.(mux.Hijacker); ok {
+					w = h.Hijack()
+				} else {
+					break
+				}
 			}
+		} else {
+			f, ok = faces[params.FaceID]
+		}
+		if !ok {
+			respond(respIncorrectParams, t)
+			return
 		}
 		respond(respOK, t)
 
@@ -97,6 +109,10 @@ func handleLocal() {
 			},
 		},
 	} {
-		nextHop.add(s.url, s, false)
+		if s.handleCommand != nil {
+			nextHop.add(s.url, s, false)
+		} else {
+			nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(1024)(s)}, false)
+		}
 	}
 }

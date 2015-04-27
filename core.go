@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 )
 
@@ -20,14 +21,19 @@ var (
 	faceCreate = make(chan net.Conn)
 	faceClose  = make(chan uint64)
 
-	forwarded = make(map[string]struct{})
-	mu        sync.Mutex
-
 	nextHop = newFIB()
+
+	serializer = loopChecker(mux.Cacher(mux.HandlerFunc(
+		func(w mux.Sender, i *ndn.Interest) {
+			reqSend <- &request{
+				sender:   w,
+				interest: i,
+			}
+		})))
 )
 
 type request struct {
-	sender   *face
+	sender   mux.Sender
 	interest *ndn.Interest
 }
 
@@ -43,7 +49,6 @@ func run() {
 
 	quit := make(chan os.Signal)
 	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-
 	for {
 		select {
 		case conn := <-faceCreate:
@@ -59,21 +64,26 @@ func run() {
 	}
 }
 
-func checkLoop(i *ndn.Interest) bool {
-	mu.Lock()
-	defer mu.Unlock()
-	interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
-	if _, ok := forwarded[interestID]; ok {
-		return true
-	}
-	forwarded[interestID] = struct{}{}
-	go func() {
-		time.Sleep(time.Minute)
+func loopChecker(next mux.Handler) mux.Handler {
+	forwarded := make(map[string]struct{})
+	var mu sync.Mutex
+	return mux.HandlerFunc(func(w mux.Sender, i *ndn.Interest) {
+		interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
 		mu.Lock()
-		delete(forwarded, interestID)
+		if _, ok := forwarded[interestID]; ok {
+			mu.Unlock()
+			return
+		}
+		forwarded[interestID] = struct{}{}
 		mu.Unlock()
-	}()
-	return false
+		go func() {
+			time.Sleep(time.Minute)
+			mu.Lock()
+			delete(forwarded, interestID)
+			mu.Unlock()
+		}()
+		next.ServeNDN(w, i)
+	})
 }
 
 func addFace(conn net.Conn) {
@@ -89,20 +99,7 @@ func addFace(conn net.Conn) {
 
 	go func() {
 		for i := range interestRecv {
-			if checkLoop(i) {
-				continue
-			}
-
-			cache := ndn.ContentStore.Get(i)
-			if cache != nil {
-				f.SendData(cache)
-				continue
-			}
-
-			reqSend <- &request{
-				sender:   f,
-				interest: i,
-			}
+			serializer.ServeNDN(f, i)
 		}
 		faceClose <- f.id
 		f.Close()

@@ -5,13 +5,10 @@ import (
 	"os"
 )
 
-type url struct {
-	Network, Address string
-}
-
 type config struct {
-	Listen         []url
-	Remote         []url
+	Listen, Remote []struct {
+		Network, Address string
+	}
 	PrivateKeyPath string
 }
 
