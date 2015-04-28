@@ -13,6 +13,7 @@ type service struct {
 }
 
 func (s *service) ServeNDN(w mux.Sender, i *ndn.Interest) {
+	log(s.url)
 	respond := func(v interface{}, t uint64) {
 		d := &ndn.Data{Name: i.Name}
 		d.Content, _ = tlv.MarshalByte(v, t)
@@ -67,7 +68,6 @@ func handleLocal() {
 		{
 			url: "/localhost/nfd/rib/register",
 			handleCommand: func(params *ndn.Parameters, f *face) {
-				f.log("rib/register")
 				name := params.Name.String()
 				f.route[name] = ndn.Route{
 					Origin: params.Origin,
@@ -80,7 +80,6 @@ func handleLocal() {
 		{
 			url: "/localhost/nfd/rib/unregister",
 			handleCommand: func(params *ndn.Parameters, f *face) {
-				f.log("rib/unregister")
 				name := params.Name.String()
 				delete(f.route, name)
 				nextHop.remove(name, f, true)
@@ -109,10 +108,12 @@ func handleLocal() {
 			},
 		},
 	} {
+		var h mux.Handler
 		if s.handleCommand != nil {
-			nextHop.add(s.url, s, false)
+			h = s
 		} else {
-			nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(1024)(s)}, false)
+			h = &struct{ mux.Handler }{mux.Segmentor(1024)(s)}
 		}
+		nextHop.add(s.url, h, false)
 	}
 }

@@ -17,7 +17,6 @@ func newFIB() *fib {
 func (f *fib) ServeNDN(w mux.Sender, i *ndn.Interest) {
 	f.Match(i.Name.String(), func(v interface{}) {
 		for h := range v.(map[mux.Handler]struct{}) {
-			log("forward", i.Name)
 			h.ServeNDN(w, i)
 			break
 		}

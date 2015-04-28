@@ -103,6 +103,7 @@ func addFace(conn net.Conn) {
 		}
 		faceClose <- f.id
 		f.Close()
+		f.log("face removed")
 	}()
 	f.log("face created")
 }
@@ -113,7 +114,6 @@ func removeFace(faceID uint64) {
 	for name := range f.route {
 		nextHop.remove(name, f, true)
 	}
-	f.log("face removed")
 }
 
 func log(i ...interface{}) {

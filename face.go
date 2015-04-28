@@ -23,6 +23,7 @@ func (f *face) log(i ...interface{}) {
 
 func (f *face) ServeNDN(w mux.Sender, i *ndn.Interest) {
 	go func() {
+		f.log("forward", i.Name)
 		d, ok := <-f.SendInterest(i)
 		if !ok {
 			return
