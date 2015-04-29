@@ -108,12 +108,7 @@ func handleLocal() {
 			},
 		},
 	} {
-		var h mux.Handler
-		if s.handleCommand != nil {
-			h = s
-		} else {
-			h = &struct{ mux.Handler }{mux.Segmentor(1024)(s)}
-		}
-		nextHop.add(s.url, h, false)
+		// NOTE: force mux.Handler to be comparable
+		nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(1024)(s)}, false)
 	}
 }
