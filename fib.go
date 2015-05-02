@@ -24,6 +24,7 @@ func (f *fib) ServeNDN(w mux.Sender, i *ndn.Interest) {
 }
 
 func (f *fib) add(name string, h mux.Handler, childInherit bool) {
+	log("add", name)
 	updater := func(v interface{}) interface{} {
 		var m map[mux.Handler]struct{}
 		if v == nil {
@@ -44,6 +45,7 @@ func (f *fib) add(name string, h mux.Handler, childInherit bool) {
 }
 
 func (f *fib) remove(name string, h mux.Handler, childInherit bool) {
+	log("remove", name)
 	updater := func(v interface{}) interface{} {
 		if v == nil {
 			return nil
