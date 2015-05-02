@@ -1,9 +1,11 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"io/ioutil"
 	"net"
+	"os"
 )
 
 var (
@@ -15,14 +17,21 @@ func main() {
 	flag.Parse()
 
 	// config
-	conf, err := newConfig(*configPath)
+	f, err := os.Open(*configPath)
+	if err != nil {
+		log(err)
+		return
+	}
+	defer f.Close()
+
+	err = json.NewDecoder(f).Decode(&config)
 	if err != nil {
 		log(err)
 		return
 	}
 
 	// key
-	pem, err := ioutil.ReadFile(conf.PrivateKeyPath)
+	pem, err := ioutil.ReadFile(config.PrivateKeyPath)
 	if err != nil {
 		log(err)
 		return
@@ -31,7 +40,7 @@ func main() {
 	log("key", key.Name)
 
 	// create faces
-	for _, u := range conf.Listen {
+	for _, u := range config.Listen {
 		ln, err := net.Listen(u.Network, u.Address)
 		if err != nil {
 			log(err)
