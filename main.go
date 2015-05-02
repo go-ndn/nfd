@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io/ioutil"
 	"net"
 )
 
@@ -21,11 +22,12 @@ func main() {
 	}
 
 	// key
-	err = decodePrivateKey(conf.PrivateKeyPath)
+	pem, err := ioutil.ReadFile(conf.PrivateKeyPath)
 	if err != nil {
 		log(err)
 		return
 	}
+	key.DecodePrivateKey(pem)
 	log("key", key.Name)
 
 	// create faces

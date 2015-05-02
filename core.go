@@ -17,6 +17,9 @@ var (
 	lastFaceID = uint64(255)
 	faces      = make(map[uint64]*face)
 
+	key       ndn.Key
+	timestamp uint64
+
 	reqSend    = make(chan *request)
 	faceCreate = make(chan net.Conn)
 	faceClose  = make(chan uint64)
