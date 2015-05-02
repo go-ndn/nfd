@@ -6,7 +6,7 @@ import (
 )
 
 type config struct {
-	Listen, Remote []struct {
+	Listen []struct {
 		Network, Address string
 	}
 	PrivateKeyPath string

@@ -47,19 +47,6 @@ func main() {
 			}
 		}()
 	}
-	for _, u := range conf.Remote {
-		go func(network, address string) {
-			for {
-				// retry until connection established
-				conn, err := net.Dial(network, address)
-				if err != nil {
-					continue
-				}
-				faceCreate <- conn
-				break
-			}
-		}(u.Network, u.Address)
-	}
 
 	run()
 }

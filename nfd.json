@@ -5,6 +5,5 @@
       "Network": "tcp",
       "Address": ":6363"
     }
-  ],
-  "Remote": []
+  ]
 }
