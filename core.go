@@ -27,7 +27,7 @@ var (
 	nextHop = newFIB()
 
 	serializer = loopChecker(mux.Cacher(mux.HandlerFunc(
-		func(w mux.Sender, i *ndn.Interest) {
+		func(w ndn.Sender, i *ndn.Interest) {
 			reqSend <- &request{
 				sender:   w,
 				interest: i,
@@ -36,7 +36,7 @@ var (
 )
 
 type request struct {
-	sender   mux.Sender
+	sender   ndn.Sender
 	interest *ndn.Interest
 }
 
@@ -70,7 +70,7 @@ func run() {
 func loopChecker(next mux.Handler) mux.Handler {
 	forwarded := make(map[string]struct{})
 	var mu sync.Mutex
-	return mux.HandlerFunc(func(w mux.Sender, i *ndn.Interest) {
+	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
 		interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
 		mu.Lock()
 		if _, ok := forwarded[interestID]; ok {

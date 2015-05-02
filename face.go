@@ -3,12 +3,11 @@ package main
 import (
 	"fmt"
 
-	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 )
 
 type face struct {
-	*ndn.Face
+	ndn.Face
 
 	id    uint64
 	route map[string]ndn.Route
@@ -21,7 +20,7 @@ func (f *face) log(i ...interface{}) {
 	fmt.Printf("[%s] %s", f.RemoteAddr(), fmt.Sprintln(i...))
 }
 
-func (f *face) ServeNDN(w mux.Sender, i *ndn.Interest) {
+func (f *face) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	go func() {
 		f.log("forward", i.Name)
 		d, ok := <-f.SendInterest(i)

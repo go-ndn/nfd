@@ -12,7 +12,7 @@ type service struct {
 	handleDataset func() interface{}
 }
 
-func (s *service) ServeNDN(w mux.Sender, i *ndn.Interest) {
+func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	log(s.url)
 	respond := func(v interface{}, t uint64) {
 		d := &ndn.Data{Name: i.Name}

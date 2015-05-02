@@ -14,7 +14,7 @@ func newFIB() *fib {
 	return &fib{Matcher: lpm.New()}
 }
 
-func (f *fib) ServeNDN(w mux.Sender, i *ndn.Interest) {
+func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	f.Match(i.Name.String(), func(v interface{}) {
 		for h := range v.(map[mux.Handler]struct{}) {
 			h.ServeNDN(w, i)
