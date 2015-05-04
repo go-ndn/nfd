@@ -10,7 +10,11 @@ The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 licen
 
 Each face runs in its own goroutine, and the core handles communication between each faces.
 
-When a face receives an interest from remote face, it sends a forward request to the core. The core looks up centralized RIB for a list of faces to fulfill this request, and distributes this request to them. After theses faces create request promises, these promises return to the originating face along the same path. Finally, the originating face waits for promises and writes out data.
+When a face receives an interest from remote face, it sends a forward request to the core. The core looks up centralized RIB for a list of faces to fulfill this request, and distributes this request to them.
+
+# Trust model
+
+Only one `.ndncert` is supported. You can generate one from `ndn-cert-gen`.
 
 # Install
 ```

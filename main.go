@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"io/ioutil"
 	"net"
 	"os"
 )
@@ -23,7 +22,6 @@ func main() {
 		return
 	}
 	defer f.Close()
-
 	err = json.NewDecoder(f).Decode(&config)
 	if err != nil {
 		log(err)
@@ -31,12 +29,13 @@ func main() {
 	}
 
 	// key
-	pem, err := ioutil.ReadFile(config.PrivateKeyPath)
+	f, err = os.Open(config.NDNCertPath)
 	if err != nil {
 		log(err)
 		return
 	}
-	key.DecodePrivateKey(pem)
+	defer f.Close()
+	key.DecodeCertificate(f)
 	log("key", key.Name)
 
 	// create faces

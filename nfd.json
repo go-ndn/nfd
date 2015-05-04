@@ -1,5 +1,5 @@
 {
-  "PrivateKeyPath": "key/default.pri",
+  "NDNCertPath": "key/default.ndncert",
   "Listen": [
     {
       "Network": "tcp",
