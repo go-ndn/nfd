@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/binary"
+	"time"
+
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/tlv"
@@ -14,18 +17,17 @@ type service struct {
 
 func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	log(s.url)
-	respond := func(v interface{}, t uint64) {
-		d := &ndn.Data{Name: i.Name}
-		d.Content, _ = tlv.MarshalByte(v, t)
-		w.SendData(d)
-	}
 	if s.handleCommand != nil {
+		respond := func(resp *ndn.ControlResponse) {
+			d := &ndn.Data{Name: i.Name}
+			d.Content, _ = tlv.MarshalByte(resp, 101)
+			w.SendData(d)
+		}
 		// command
-		t := uint64(101)
 		cmd := new(ndn.Command)
 		tlv.Copy(&i.Name, cmd)
 		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-			respond(respNotAuthorized, t)
+			respond(respNotAuthorized)
 			return
 		}
 		timestamp = cmd.Timestamp
@@ -51,15 +53,20 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 			f, ok = faces[params.FaceID]
 		}
 		if !ok {
-			respond(respIncorrectParams, t)
+			respond(respIncorrectParams)
 			return
 		}
-		respond(respOK, t)
+		respond(respOK)
 
 		s.handleCommand(params, f)
 	} else {
 		// dataset
-		respond(s.handleDataset(), 128)
+		timestamp := make([]byte, 8)
+		binary.BigEndian.PutUint64(timestamp, uint64(time.Now().UTC().UnixNano()/1000000))
+		d := &ndn.Data{Name: ndn.NewName(s.url)}
+		d.Name.Components = append(d.Name.Components, timestamp)
+		d.Content, _ = tlv.MarshalByte(s.handleDataset(), 128)
+		w.SendData(d)
 	}
 }
 
