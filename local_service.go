@@ -116,6 +116,6 @@ func handleLocal() {
 		},
 	} {
 		// NOTE: force mux.Handler to be comparable
-		nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(1024)(s)}, false)
+		nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(4096)(s)}, false)
 	}
 }
