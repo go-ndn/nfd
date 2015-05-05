@@ -81,7 +81,7 @@ func handleLocal() {
 					Cost:   params.Cost,
 					Flags:  params.Flags,
 				}
-				nextHop.add(name, f, params.Flags&ndn.FlagChildInherit != 0)
+				nextHop.add(name, f)
 			},
 		},
 		{
@@ -89,7 +89,7 @@ func handleLocal() {
 			handleCommand: func(params *ndn.Parameters, f *face) {
 				name := params.Name.String()
 				delete(f.route, name)
-				nextHop.remove(name, f, true)
+				nextHop.remove(name, f)
 			},
 		},
 		{
@@ -116,6 +116,6 @@ func handleLocal() {
 		},
 	} {
 		// NOTE: force mux.Handler to be comparable
-		nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(4096)(s)}, false)
+		nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(4096)(s)})
 	}
 }

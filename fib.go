@@ -24,9 +24,9 @@ func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	}, true)
 }
 
-func (f *fib) add(name string, h mux.Handler, childInherit bool) {
+func (f *fib) add(name string, h mux.Handler) {
 	log("add", name)
-	updater := func(v interface{}) interface{} {
+	f.Update(name, func(v interface{}) interface{} {
 		var m map[mux.Handler]struct{}
 		if v == nil {
 			m = make(map[mux.Handler]struct{})
@@ -35,19 +35,12 @@ func (f *fib) add(name string, h mux.Handler, childInherit bool) {
 		}
 		m[h] = struct{}{}
 		return m
-	}
-	if childInherit {
-		f.UpdateAll(name, func(_ string, v interface{}) interface{} {
-			return updater(v)
-		}, false)
-	} else {
-		f.Update(name, updater, false)
-	}
+	}, false)
 }
 
-func (f *fib) remove(name string, h mux.Handler, childInherit bool) {
+func (f *fib) remove(name string, h mux.Handler) {
 	log("remove", name)
-	updater := func(v interface{}) interface{} {
+	f.Update(name, func(v interface{}) interface{} {
 		if v == nil {
 			return nil
 		}
@@ -57,12 +50,5 @@ func (f *fib) remove(name string, h mux.Handler, childInherit bool) {
 			return nil
 		}
 		return m
-	}
-	if childInherit {
-		f.UpdateAll(name, func(_ string, v interface{}) interface{} {
-			return updater(v)
-		}, false)
-	} else {
-		f.Update(name, updater, false)
-	}
+	}, false)
 }

@@ -115,7 +115,7 @@ func removeFace(faceID uint64) {
 	f := faces[faceID]
 	delete(faces, faceID)
 	for name := range f.route {
-		nextHop.remove(name, f, true)
+		nextHop.remove(name, f)
 	}
 }
 
