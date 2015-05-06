@@ -90,10 +90,10 @@ func loopChecker(next mux.Handler) mux.Handler {
 }
 
 func addFace(conn net.Conn) {
-	interestRecv := make(chan *ndn.Interest)
+	recv := make(chan *ndn.Interest)
 
 	f := &face{
-		Face: ndn.NewFace(conn, interestRecv),
+		Face: ndn.NewFace(conn, recv),
 
 		id:    newFaceID(),
 		route: make(map[string]ndn.Route),
@@ -101,7 +101,7 @@ func addFace(conn net.Conn) {
 	faces[f.id] = f
 
 	go func() {
-		for i := range interestRecv {
+		for i := range recv {
 			serializer.ServeNDN(f, i)
 		}
 		faceClose <- f.id
