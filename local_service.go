@@ -59,7 +59,7 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 		respond(respOK)
 
 		s.handleCommand(params, f)
-	} else {
+	} else if s.handleDataset != nil {
 		// dataset
 		timestamp := make([]byte, 8)
 		binary.BigEndian.PutUint64(timestamp, uint64(time.Now().UTC().UnixNano()/1000000))
@@ -67,6 +67,8 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 		d.Name.Components = append(d.Name.Components, timestamp)
 		d.Content, _ = tlv.MarshalByte(s.handleDataset(), 128)
 		w.SendData(d)
+	} else {
+		log(i.Name)
 	}
 }
 
@@ -113,6 +115,9 @@ func handleLocal() {
 				}
 				return routes
 			},
+		},
+		{
+			url: "/localhost/nfd",
 		},
 	} {
 		// NOTE: force mux.Handler to be comparable

@@ -1,9 +1,13 @@
 {
-  "NDNCertPath": "key/default.ndncert",
-  "Listen": [
-    {
-      "Network": "tcp",
-      "Address": ":6363"
-    }
-  ]
+	"NDNCertPath": "key/default.ndncert",
+	"Listen": [
+		{
+			"Network": "tcp",
+			"Address": ":6363"
+		},
+		{
+			"Network": "udp",
+			"Address": ":6363"
+		}
+	]
 }
