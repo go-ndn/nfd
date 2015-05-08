@@ -5,6 +5,8 @@ import (
 	"flag"
 	"net"
 	"os"
+
+	"github.com/go-ndn/packet"
 )
 
 var (
@@ -40,7 +42,7 @@ func main() {
 
 	// create faces
 	for _, u := range config.Listen {
-		ln, err := net.Listen(u.Network, u.Address)
+		ln, err := listen(u.Network, u.Address)
 		if err != nil {
 			log(err)
 			return
@@ -59,4 +61,25 @@ func main() {
 	}
 
 	run()
+}
+
+func listen(network, address string) (net.Listener, error) {
+	switch network {
+	case "udp":
+		fallthrough
+	case "udp4":
+		fallthrough
+	case "udp6":
+		fallthrough
+	case "ip":
+		fallthrough
+	case "ip4":
+		fallthrough
+	case "ip6":
+		fallthrough
+	case "unixgram":
+		return packet.Listen(network, address)
+	default:
+		return net.Listen(network, address)
+	}
 }
