@@ -65,10 +65,12 @@ func loopChecker(next mux.Handler) mux.Handler {
 	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
 		interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
 		mu.Lock()
-		if _, ok := forwarded[interestID]; ok {
-			mu.Unlock()
+		_, ok := forwarded[interestID]
+		mu.Unlock()
+		if ok {
 			return
 		}
+		mu.Lock()
 		forwarded[interestID] = struct{}{}
 		mu.Unlock()
 		go func() {
