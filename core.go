@@ -3,10 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"os"
-	"os/signal"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/go-ndn/mux"
@@ -50,8 +47,6 @@ func run() {
 
 	log("start")
 
-	quit := make(chan os.Signal)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
 	for {
 		select {
 		case conn := <-faceCreate:
@@ -60,9 +55,6 @@ func run() {
 			removeFace(faceID)
 		case req := <-reqSend:
 			nextHop.ServeNDN(req.sender, req.interest)
-		case <-quit:
-			log("goodbye")
-			return
 		}
 	}
 }
