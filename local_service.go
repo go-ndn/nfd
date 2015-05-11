@@ -75,7 +75,7 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 func handleLocal() {
 	for _, s := range []*service{
 		{
-			url: "/localhost/nfd/rib/register",
+			url: "/localhop/nfd/rib/register",
 			handleCommand: func(params *ndn.Parameters, f *face) {
 				name := params.Name.String()
 				f.route[name] = ndn.Route{
@@ -87,7 +87,7 @@ func handleLocal() {
 			},
 		},
 		{
-			url: "/localhost/nfd/rib/unregister",
+			url: "/localhop/nfd/rib/unregister",
 			handleCommand: func(params *ndn.Parameters, f *face) {
 				name := params.Name.String()
 				delete(f.route, name)
@@ -95,7 +95,7 @@ func handleLocal() {
 			},
 		},
 		{
-			url: "/localhost/nfd/rib/list",
+			url: "/localhop/nfd/rib/list",
 			handleDataset: func() interface{} {
 				index := make(map[string]int)
 				var routes []ndn.RIBEntry
@@ -117,7 +117,7 @@ func handleLocal() {
 			},
 		},
 		{
-			url: "/localhost/nfd",
+			url: "/localhop/nfd",
 		},
 	} {
 		// NOTE: force mux.Handler to be comparable
