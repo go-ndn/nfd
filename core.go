@@ -61,12 +61,12 @@ func run() {
 
 func loopChecker(next mux.Handler) mux.Handler {
 	forwarded := make(map[string]struct{})
-	var mu sync.Mutex
+	var mu sync.RWMutex
 	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
 		interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
-		mu.Lock()
+		mu.RLock()
 		_, ok := forwarded[interestID]
-		mu.Unlock()
+		mu.RUnlock()
 		if ok {
 			return
 		}
