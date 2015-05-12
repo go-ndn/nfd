@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"flag"
 	"net"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 
 	"github.com/go-ndn/packet"
@@ -15,6 +17,9 @@ var (
 )
 
 func main() {
+	// pprof
+	go http.ListenAndServe(":6060", nil)
+
 	flag.Parse()
 
 	// config
