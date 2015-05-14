@@ -16,14 +16,14 @@ type service struct {
 }
 
 func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
-	log(s.url)
 	if s.handleCommand != nil {
+		log("command", s.url)
+
 		respond := func(resp *ndn.ControlResponse) {
 			d := &ndn.Data{Name: i.Name}
 			d.Content, _ = tlv.MarshalByte(resp, 101)
 			w.SendData(d)
 		}
-		// command
 		cmd := new(ndn.Command)
 		tlv.Copy(&i.Name, cmd)
 		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
@@ -60,22 +60,23 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 
 		s.handleCommand(params, f)
 	} else if s.handleDataset != nil {
-		// dataset
+		log("dataset", s.url)
+
 		timestamp := make([]byte, 8)
 		binary.BigEndian.PutUint64(timestamp, uint64(time.Now().UTC().UnixNano()/1000000))
-		d := &ndn.Data{Name: ndn.NewName(s.url)}
+		d := &ndn.Data{Name: i.Name}
 		d.Name.Components = append(d.Name.Components, timestamp)
 		d.Content, _ = tlv.MarshalByte(s.handleDataset(), 128)
 		w.SendData(d)
 	} else {
-		log(i.Name)
+		log("unknown", i.Name)
 	}
 }
 
 func handleLocal() {
 	for _, s := range []*service{
 		{
-			url: "/localhop/nfd/rib/register",
+			url: "/rib/register",
 			handleCommand: func(params *ndn.Parameters, f *face) {
 				name := params.Name.String()
 				f.route[name] = ndn.Route{
@@ -87,7 +88,7 @@ func handleLocal() {
 			},
 		},
 		{
-			url: "/localhop/nfd/rib/unregister",
+			url: "/rib/unregister",
 			handleCommand: func(params *ndn.Parameters, f *face) {
 				name := params.Name.String()
 				delete(f.route, name)
@@ -95,7 +96,7 @@ func handleLocal() {
 			},
 		},
 		{
-			url: "/localhop/nfd/rib/list",
+			url: "/rib/list",
 			handleDataset: func() interface{} {
 				index := make(map[string]int)
 				var routes []ndn.RIBEntry
@@ -117,10 +118,13 @@ func handleLocal() {
 			},
 		},
 		{
-			url: "/localhop/nfd",
+		// nfd local service fallback
 		},
 	} {
 		// NOTE: force mux.Handler to be comparable
-		nextHop.add(s.url, &struct{ mux.Handler }{mux.Segmentor(4096)(s)})
+		h := &struct{ mux.Handler }{mux.Segmentor(4096)(s)}
+		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
+			nextHop.add(prefix+s.url, h)
+		}
 	}
 }
