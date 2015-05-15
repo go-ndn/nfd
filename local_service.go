@@ -56,6 +56,13 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 			respond(respIncorrectParams)
 			return
 		}
+
+		respOK := &ndn.ControlResponse{
+			StatusCode: 200,
+			StatusText: "OK",
+			Parameters: *params,
+		}
+		respOK.Parameters.FaceID = f.id
 		respond(respOK)
 
 		s.handleCommand(params, f)

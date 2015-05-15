@@ -5,10 +5,6 @@ import (
 )
 
 var (
-	respOK = &ndn.ControlResponse{
-		StatusCode: 200,
-		StatusText: "OK",
-	}
 	respIncorrectParams = &ndn.ControlResponse{
 		StatusCode: 400,
 		StatusText: "Incorrect Parameters",
