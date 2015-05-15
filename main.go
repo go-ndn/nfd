@@ -70,19 +70,7 @@ func main() {
 
 func listen(network, address string) (net.Listener, error) {
 	switch network {
-	case "udp":
-		fallthrough
-	case "udp4":
-		fallthrough
-	case "udp6":
-		fallthrough
-	case "ip":
-		fallthrough
-	case "ip4":
-		fallthrough
-	case "ip6":
-		fallthrough
-	case "unixgram":
+	case "udp", "udp4", "udp6", "ip", "ip4", "ip6", "unixgram":
 		return packet.Listen(network, address)
 	default:
 		return net.Listen(network, address)
