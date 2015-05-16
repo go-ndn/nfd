@@ -26,7 +26,7 @@ func (s *service) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 		}
 		cmd := new(ndn.Command)
 		tlv.Copy(&i.Name, cmd)
-		if cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
+		if !*debug && (cmd.Timestamp <= timestamp || key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil) {
 			respond(respNotAuthorized)
 			return
 		}
