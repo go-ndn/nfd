@@ -8,6 +8,7 @@ import (
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/packet"
 )
 
@@ -23,27 +24,31 @@ func main() {
 	flag.Parse()
 
 	// config
-	f, err := os.Open(*configPath)
+	configFile, err := os.Open(*configPath)
 	if err != nil {
 		log(err)
 		return
 	}
-	defer f.Close()
-	err = json.NewDecoder(f).Decode(&config)
+	defer configFile.Close()
+	err = json.NewDecoder(configFile).Decode(&config)
 	if err != nil {
 		log(err)
 		return
 	}
 
 	// key
-	f, err = os.Open(config.NDNCertPath)
+	cert, err := os.Open(config.NDNCertPath)
 	if err != nil {
 		log(err)
 		return
 	}
-	defer f.Close()
-	key.DecodeCertificate(f)
-	log("key", key.Name)
+	defer cert.Close()
+	key, err = ndn.DecodeCertificate(cert)
+	if err != nil {
+		log(err)
+		return
+	}
+	log("key", key.Locator())
 
 	// create faces
 	for _, u := range config.Listen {
