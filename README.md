@@ -1,8 +1,8 @@
-# NDN Forwarding Daemon (NFD)
+# NDN Forwarding Daemon (go-nfd)
 
 This is an alternative implementation of nfd, NDN forwarding daemon.
 
-It is small, and go get-able.
+By using sensible strategies and only one root certificate, go-nfd tries to be as simple as possible and compatible with nfd.
 
 The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 license.
 
@@ -11,10 +11,6 @@ The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 licen
 Each face runs in its own goroutine, and the core handles communication between each faces.
 
 When a face receives an interest from remote face, it sends a forward request to the core. The core looks up centralized RIB for a list of faces to fulfill this request, and distributes this request to them.
-
-# Trust model
-
-Only one `.ndncert` is supported. You can generate one from `ndn-cert-gen`.
 
 # Install
 ```
