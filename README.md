@@ -6,18 +6,42 @@ By using sensible strategies and only one root certificate, go-nfd tries to be a
 
 The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 license.
 
-# Design
+```
+Usage of ./nfd:
+  -config string
+    	config path (default "nfd.json")
+  -debug
+    	enable logging
+```
+
+```
+{
+	"NDNCertPath": "key/default.ndncert",
+	"Listen": [
+		{
+			"Network": "tcp",
+			"Address": ":6363"
+		},
+		{
+			"Network": "udp",
+			"Address": ":6363"
+		}
+	]
+}
+```
+
+## Design
 
 Each face runs in its own goroutine, and the core handles communication between each faces.
 
 When a face receives an interest from remote face, it sends a forward request to the core. The core looks up centralized RIB for a list of faces to fulfill this request, and distributes this request to them.
 
-# Install
+## Install
 ```
 go get github.com/go-ndn/nfd
 ```
 
-# What is supported
+## Supported features
 
 - [x] multi-threaded
 - [x] some control commands
@@ -25,7 +49,7 @@ go get github.com/go-ndn/nfd
 - [x] content store
 - [x] authentication
 
-# Benchmark
+## Benchmark
 
 Disclaimer: This is just a relative performance comparison between go-nfd and nfd. Caching, logging and signing are all disabled. The whole experiment is conducted many times to get the average. The data packet is a few MB in size.
 
