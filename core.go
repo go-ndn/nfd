@@ -26,15 +26,15 @@ var (
 	serializer = loopChecker(mux.Cacher(mux.HandlerFunc(
 		func(w ndn.Sender, i *ndn.Interest) {
 			reqSend <- &request{
-				sender:   w,
-				interest: i,
+				Sender:   w,
+				Interest: i,
 			}
 		})))
 )
 
 type request struct {
-	sender   ndn.Sender
-	interest *ndn.Interest
+	ndn.Sender
+	*ndn.Interest
 }
 
 func newFaceID() (id uint64) {
@@ -54,7 +54,7 @@ func run() {
 		case faceID := <-faceClose:
 			removeFace(faceID)
 		case req := <-reqSend:
-			nextHop.ServeNDN(req.sender, req.interest)
+			nextHop.ServeNDN(req.Sender, req.Interest)
 		}
 	}
 }
