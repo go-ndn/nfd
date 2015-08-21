@@ -3,8 +3,6 @@ package main
 import (
 	"fmt"
 	"net"
-	"sync"
-	"time"
 
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
@@ -24,6 +22,7 @@ var (
 	nextHop = newFIB()
 
 	serializer = loopChecker(mux.Cacher(mux.HandlerFunc(
+		// serialize requests
 		func(w ndn.Sender, i *ndn.Interest) {
 			reqSend <- &request{
 				Sender:   w,
@@ -57,30 +56,6 @@ func run() {
 			nextHop.ServeNDN(req.Sender, req.Interest)
 		}
 	}
-}
-
-func loopChecker(next mux.Handler) mux.Handler {
-	forwarded := make(map[string]struct{})
-	var mu sync.RWMutex
-	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
-		interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
-		mu.RLock()
-		_, ok := forwarded[interestID]
-		mu.RUnlock()
-		if ok {
-			return
-		}
-		mu.Lock()
-		forwarded[interestID] = struct{}{}
-		mu.Unlock()
-		go func() {
-			time.Sleep(time.Minute)
-			mu.Lock()
-			delete(forwarded, interestID)
-			mu.Unlock()
-		}()
-		next.ServeNDN(w, i)
-	})
 }
 
 func addFace(conn net.Conn) {
