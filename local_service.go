@@ -1,9 +1,6 @@
 package main
 
 import (
-	"encoding/binary"
-	"time"
-
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/tlv"
@@ -64,10 +61,7 @@ func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 type datasetService func() interface{}
 
 func (s datasetService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
-	timestamp := make([]byte, 8)
-	binary.BigEndian.PutUint64(timestamp, uint64(time.Now().UTC().UnixNano()/1000000))
 	d := &ndn.Data{Name: i.Name}
-	d.Name.Components = append(d.Name.Components, timestamp)
 	d.Content, _ = tlv.MarshalByte(s(), 128)
 	w.SendData(d)
 }
@@ -108,6 +102,10 @@ func handleLocal() {
 			return routes
 		}),
 	} {
+		// add version number
+		if _, ok := h.(datasetService); ok {
+			h = mux.Versioner(h)
+		}
 		// NOTE: mux.Handler must be comparable
 		h = &struct{ mux.Handler }{mux.Segmentor(4096)(h)}
 		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
