@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"log"
 	"net"
+	"os"
 
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
@@ -44,8 +47,9 @@ func newFaceID() (id uint64) {
 func run() {
 	handleLocal()
 
-	log("start")
-
+	if !*debug {
+		log.SetOutput(ioutil.Discard)
+	}
 	for {
 		select {
 		case conn := <-faceCreate:
@@ -62,11 +66,17 @@ func addFace(conn net.Conn) {
 	recv := make(chan *ndn.Interest)
 
 	f := &face{
-		Face: ndn.NewFace(conn, recv),
-
+		Face:  ndn.NewFace(conn, recv),
 		id:    newFaceID(),
 		route: make(map[string]ndn.Route),
 	}
+
+	if *debug {
+		f.Logger = log.New(os.Stdout, fmt.Sprintf("[%s] ", conn.RemoteAddr()), log.LstdFlags)
+	} else {
+		f.Logger = log.New(ioutil.Discard, "", 0)
+	}
+
 	faces[f.id] = f
 
 	go func() {
@@ -75,9 +85,9 @@ func addFace(conn net.Conn) {
 		}
 		faceClose <- f.id
 		f.Close()
-		f.log("face removed")
+		f.Println("face removed")
 	}()
-	f.log("face created")
+	f.Println("face created")
 }
 
 func removeFace(faceID uint64) {
@@ -86,11 +96,4 @@ func removeFace(faceID uint64) {
 	for name := range f.route {
 		nextHop.remove(name, f)
 	}
-}
-
-func log(i ...interface{}) {
-	if !*debug {
-		return
-	}
-	fmt.Printf("[core] %s", fmt.Sprintln(i...))
 }

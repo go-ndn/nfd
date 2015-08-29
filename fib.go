@@ -1,6 +1,8 @@
 package main
 
 import (
+	"log"
+
 	"github.com/go-ndn/lpm"
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
@@ -24,7 +26,7 @@ func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 }
 
 func (f *fib) add(name string, h mux.Handler) {
-	log("add", name)
+	log.Println("add", name)
 	f.Update(name, func(v interface{}) interface{} {
 		var m map[mux.Handler]struct{}
 		if v == nil {
@@ -38,7 +40,7 @@ func (f *fib) add(name string, h mux.Handler) {
 }
 
 func (f *fib) remove(name string, h mux.Handler) {
-	log("remove", name)
+	log.Println("remove", name)
 	f.Update(name, func(v interface{}) interface{} {
 		if v == nil {
 			return nil

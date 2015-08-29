@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"log"
 	"net"
 	"net/http"
 	_ "net/http/pprof"
@@ -26,39 +27,34 @@ func main() {
 	// config
 	configFile, err := os.Open(*configPath)
 	if err != nil {
-		log(err)
-		return
+		log.Fatal(err)
 	}
 	defer configFile.Close()
 	err = json.NewDecoder(configFile).Decode(&config)
 	if err != nil {
-		log(err)
-		return
+		log.Fatal(err)
 	}
 
 	// key
 	cert, err := os.Open(config.NDNCertPath)
 	if err != nil {
-		log(err)
-		return
+		log.Fatal(err)
 	}
 	defer cert.Close()
 	key, err = ndn.DecodeCertificate(cert)
 	if err != nil {
-		log(err)
-		return
+		log.Fatal(err)
 	}
-	log("key", key.Locator())
+	log.Println("key", key.Locator())
 
 	// create faces
 	for _, u := range config.Listen {
 		ln, err := listen(u.Network, u.Address)
 		if err != nil {
-			log(err)
-			return
+			log.Fatal(err)
 		}
 		defer ln.Close()
-		log("listen", u.Network, u.Address)
+		log.Println("listen", u.Network, u.Address)
 		go func() {
 			for {
 				conn, err := ln.Accept()
