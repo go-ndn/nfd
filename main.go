@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"flag"
 	"log"
-	"net"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
@@ -51,7 +50,7 @@ func main() {
 
 	// create faces
 	for _, u := range config.Listen {
-		ln, err := listen(u.Network, u.Address)
+		ln, err := packet.Listen(u.Network, u.Address)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -69,13 +68,4 @@ func main() {
 	}
 
 	run()
-}
-
-func listen(network, address string) (net.Listener, error) {
-	switch network {
-	case "udp", "udp4", "udp6", "ip", "ip4", "ip6", "unixgram":
-		return packet.Listen(network, address)
-	default:
-		return net.Listen(network, address)
-	}
 }
