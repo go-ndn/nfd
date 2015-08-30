@@ -5,10 +5,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-	"os"
 
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
+	"github.com/go-ndn/sink"
 )
 
 var (
@@ -72,7 +72,7 @@ func addFace(conn net.Conn) {
 	}
 
 	if *debug {
-		f.Logger = log.New(os.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()), log.LstdFlags)
+		f.Logger = log.New(sink.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()), log.LstdFlags)
 	} else {
 		f.Logger = log.New(ioutil.Discard, "", 0)
 	}

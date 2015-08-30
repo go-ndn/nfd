@@ -11,6 +11,7 @@ import (
 
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/packet"
+	"github.com/go-ndn/sink"
 )
 
 var (
@@ -19,10 +20,11 @@ var (
 )
 
 func main() {
+	log.SetOutput(sink.Stderr)
+	flag.Parse()
+
 	// pprof
 	go http.ListenAndServe(":6060", nil)
-
-	flag.Parse()
 
 	// config
 	configFile, err := os.Open(*configPath)
