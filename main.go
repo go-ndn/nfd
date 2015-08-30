@@ -27,23 +27,23 @@ func main() {
 	// config
 	configFile, err := os.Open(*configPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	defer configFile.Close()
 	err = json.NewDecoder(configFile).Decode(&config)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 
 	// key
 	cert, err := os.Open(config.NDNCertPath)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	defer cert.Close()
 	key, err = ndn.DecodeCertificate(cert)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalln(err)
 	}
 	log.Println("key", key.Locator())
 
@@ -51,7 +51,7 @@ func main() {
 	for _, u := range config.Listen {
 		ln, err := listen(u.Network, u.Address)
 		if err != nil {
-			log.Fatal(err)
+			log.Fatalln(err)
 		}
 		defer ln.Close()
 		log.Println("listen", u.Network, u.Address)
