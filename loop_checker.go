@@ -9,6 +9,10 @@ import (
 	"github.com/go-ndn/ndn"
 )
 
+const (
+	loopIntv = time.Minute
+)
+
 func loopChecker(next mux.Handler) mux.Handler {
 	m := lpm.NewThreadSafe()
 	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
@@ -22,7 +26,7 @@ func loopChecker(next mux.Handler) mux.Handler {
 			return
 		}
 		go func() {
-			time.Sleep(time.Minute)
+			time.Sleep(loopIntv)
 			m.Update(interestID, func(interface{}) interface{} {
 				return nil
 			}, false)
