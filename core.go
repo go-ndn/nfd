@@ -2,13 +2,11 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
-	"log"
 	"net"
 
+	"github.com/go-ndn/log"
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
-	"github.com/go-ndn/sink"
 )
 
 var (
@@ -22,7 +20,7 @@ var (
 	faceCreate = make(chan net.Conn)
 	faceClose  = make(chan uint64)
 
-	nextHop = newFIB()
+	nextHop *fib
 
 	serializer = loopChecker(mux.Cacher(mux.HandlerFunc(
 		// serialize requests
@@ -45,11 +43,9 @@ func newFaceID() (id uint64) {
 }
 
 func run() {
+	nextHop = newFIB()
 	handleLocal()
 
-	if !*debug {
-		log.SetOutput(ioutil.Discard)
-	}
 	for {
 		select {
 		case conn := <-faceCreate:
@@ -72,9 +68,9 @@ func addFace(conn net.Conn) {
 	}
 
 	if *debug {
-		f.Logger = log.New(sink.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()), log.LstdFlags)
+		f.Logger = log.New(log.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()))
 	} else {
-		f.Logger = log.New(ioutil.Discard, "", 0)
+		f.Logger = log.Discard
 	}
 
 	faces[f.id] = f

@@ -1,14 +1,13 @@
 package main
 
 import (
-	"log"
-
+	"github.com/go-ndn/log"
 	"github.com/go-ndn/ndn"
 )
 
 type face struct {
 	ndn.Face
-	*log.Logger
+	log.Logger
 	id    uint64
 	route map[string]ndn.Route
 }

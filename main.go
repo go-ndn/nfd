@@ -3,14 +3,13 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"log"
 	"net/http"
 	_ "net/http/pprof"
 	"os"
 
+	"github.com/go-ndn/log"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/packet"
-	"github.com/go-ndn/sink"
 )
 
 var (
@@ -19,7 +18,6 @@ var (
 )
 
 func main() {
-	log.SetOutput(sink.Stderr)
 	flag.Parse()
 
 	// pprof
