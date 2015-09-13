@@ -2,7 +2,7 @@
 
 This is an alternative implementation of nfd, NDN forwarding daemon.
 
-By using sensible strategies and only one root certificate, go-nfd tries to be as simple as possible and compatible with nfd.
+Each face runs in its own goroutine, and the core serves faces' forwarding requests with channel communication. By using sensible strategies and only one root certificate, go-nfd tries to be as simple as possible and compatible with nfd.
 
 The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 license.
 
@@ -30,22 +30,16 @@ Usage of ./nfd:
 }
 ```
 
-## Design
-
-Each face runs in its own goroutine, and the core handles communication between each faces.
-
-When a face receives an interest from remote face, it sends a forward request to the core. The core looks up centralized RIB for a list of faces to fulfill this request, and distributes this request to them.
-
 ## Install
 ```
-go get github.com/go-ndn/nfd
+go get -u github.com/go-ndn/nfd
 ```
 
 ## Supported features
 
-- [x] multi-threaded
-- [x] some control commands
-- [x] forwarding
+- [x] concurrent-friendly
+- [x] `rib` commands
+- [x] basic forwarding
 - [x] content store
 - [x] authentication
 
