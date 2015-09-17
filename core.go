@@ -22,7 +22,7 @@ var (
 
 	nextHop *fib
 
-	serializer = loopChecker(mux.Cacher(mux.HandlerFunc(
+	serializer = loopChecker(mux.RawCacher(false)(mux.HandlerFunc(
 		// serialize requests
 		func(w ndn.Sender, i *ndn.Interest) {
 			reqSend <- &request{
