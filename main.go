@@ -13,8 +13,8 @@ import (
 )
 
 var (
-	configPath = flag.String("config", "nfd.json", "config path")
-	debug      = flag.Bool("debug", false, "enable logging")
+	flagConfig = flag.String("config", "nfd.json", "config path")
+	flagDebug  = flag.Bool("debug", false, "enable logging")
 )
 
 func main() {
@@ -24,7 +24,7 @@ func main() {
 	go http.ListenAndServe(":6060", nil)
 
 	// config
-	configFile, err := os.Open(*configPath)
+	configFile, err := os.Open(*flagConfig)
 	if err != nil {
 		log.Fatalln(err)
 	}

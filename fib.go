@@ -14,7 +14,7 @@ type fib struct {
 
 func newFIB() *fib {
 	f := &fib{Matcher: lpm.New()}
-	if *debug {
+	if *flagDebug {
 		f.Logger = log.New(log.Stderr, "[fib] ")
 	} else {
 		f.Logger = log.Discard

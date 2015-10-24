@@ -67,7 +67,7 @@ func addFace(conn net.Conn) {
 		route: make(map[string]ndn.Route),
 	}
 
-	if *debug {
+	if *flagDebug {
 		f.Logger = log.New(log.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()))
 	} else {
 		f.Logger = log.Discard
