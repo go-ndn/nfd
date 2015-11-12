@@ -28,13 +28,14 @@ func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 		ok bool
 	)
 	if params.FaceID == 0 {
+		sender := w
 		for {
-			f, ok = w.(*face)
+			f, ok = sender.(*face)
 			if ok {
 				break
 			}
-			if h, ok := w.(mux.Hijacker); ok {
-				w = h.Hijack()
+			if h, ok := sender.(mux.Hijacker); ok {
+				sender = h.Hijack()
 			} else {
 				break
 			}
@@ -47,6 +48,8 @@ func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 		return
 	}
 
+	s(params, f)
+
 	respOK := &ndn.ControlResponse{
 		StatusCode: 200,
 		StatusText: "OK",
@@ -54,8 +57,6 @@ func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	}
 	respOK.Parameters.FaceID = f.id
 	respond(respOK)
-
-	s(params, f)
 }
 
 type datasetService func() interface{}
@@ -75,7 +76,7 @@ func handleLocal() {
 				Cost:   params.Cost,
 				Flags:  params.Flags,
 			}
-			nextHop.add(name, f)
+			nextHop.add(name, f, mux.RawCacher(ndn.ContentStore, false), loopChecker)
 		}),
 		"/rib/unregister": commandService(func(params *ndn.Parameters, f *face) {
 			name := params.Name.String()
@@ -102,14 +103,15 @@ func handleLocal() {
 			return routes
 		}),
 	} {
-		// add version number
-		if _, ok := h.(datasetService); ok {
-			h = mux.Versioner(h)
-		}
+
 		// NOTE: mux.Handler must be comparable
-		h = &struct{ mux.Handler }{mux.Segmentor(4096)(h)}
+		h = &struct{ mux.Handler }{h}
 		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
-			nextHop.add(prefix+suffix, h)
+			if _, ok := h.(datasetService); ok {
+				nextHop.add(prefix+suffix, h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
+			} else {
+				nextHop.add(prefix+suffix, h)
+			}
 		}
 	}
 }

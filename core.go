@@ -22,14 +22,13 @@ var (
 
 	nextHop *fib
 
-	serializer = loopChecker(mux.RawCacher(ndn.ContentStore, false)(mux.HandlerFunc(
-		// serialize requests
-		func(w ndn.Sender, i *ndn.Interest) {
-			reqSend <- &request{
-				Sender:   w,
-				Interest: i,
-			}
-		})))
+	// serialize requests
+	serializer = mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
+		reqSend <- &request{
+			Sender:   w,
+			Interest: i,
+		}
+	})
 )
 
 type request struct {
