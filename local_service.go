@@ -11,7 +11,7 @@ type commandService func(*ndn.Parameters, *face)
 func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	respond := func(resp *ndn.ControlResponse) {
 		d := &ndn.Data{Name: i.Name}
-		d.Content, _ = tlv.MarshalByte(resp, 101)
+		d.Content, _ = tlv.Marshal(resp, 101)
 		w.SendData(d)
 	}
 	cmd := new(ndn.Command)
@@ -63,7 +63,7 @@ type datasetService func() interface{}
 
 func (s datasetService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	d := &ndn.Data{Name: i.Name}
-	d.Content, _ = tlv.MarshalByte(s(), 128)
+	d.Content, _ = tlv.Marshal(s(), 128)
 	w.SendData(d)
 }
 
