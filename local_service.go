@@ -103,11 +103,11 @@ func handleLocal() {
 			return routes
 		}),
 	} {
-
+		_, isDatasetService := h.(datasetService)
 		// NOTE: mux.Handler must be comparable
 		h = &struct{ mux.Handler }{h}
 		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
-			if _, ok := h.(datasetService); ok {
+			if isDatasetService {
 				nextHop.add(prefix+suffix, h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
 			} else {
 				nextHop.add(prefix+suffix, h)
