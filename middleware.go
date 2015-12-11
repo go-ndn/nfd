@@ -28,12 +28,12 @@ var (
 				if !ok {
 					return
 				}
-				go func() {
-					time.Sleep(loopIntv)
+
+				time.AfterFunc(loopIntv, func() {
 					m.Update(interestID, func(interface{}) interface{} {
 						return nil
 					}, false)
-				}()
+				})
 				next.ServeNDN(w, i)
 			})
 		}
