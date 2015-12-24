@@ -23,40 +23,39 @@ func newFIB() *fib {
 }
 
 func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
-	f.Match(i.Name.String(), func(v interface{}) {
-		for _, h := range v.(map[mux.Handler]mux.Handler) {
+	f.MatchRaw(i.Name.Components, func(v interface{}) {
+		for _, h := range v.(map[uint64]mux.Handler) {
 			h.ServeNDN(w, i)
 			break
 		}
 	}, true)
 }
 
-func (f *fib) add(name string, h mux.Handler, mw ...mux.Middleware) {
+func (f *fib) add(name string, id uint64, h mux.Handler, mw ...mux.Middleware) {
 	f.Println("add", name)
-	h2 := h
 	for _, m := range mw {
-		h2 = m(h2)
+		h = m(h)
 	}
 	f.Update(name, func(v interface{}) interface{} {
-		var m map[mux.Handler]mux.Handler
+		var m map[uint64]mux.Handler
 		if v == nil {
-			m = make(map[mux.Handler]mux.Handler)
+			m = make(map[uint64]mux.Handler)
 		} else {
-			m = v.(map[mux.Handler]mux.Handler)
+			m = v.(map[uint64]mux.Handler)
 		}
-		m[h] = h2
+		m[id] = h
 		return m
 	}, false)
 }
 
-func (f *fib) remove(name string, h mux.Handler) {
+func (f *fib) remove(name string, id uint64) {
 	f.Println("remove", name)
 	f.Update(name, func(v interface{}) interface{} {
 		if v == nil {
 			return nil
 		}
-		m := v.(map[mux.Handler]mux.Handler)
-		delete(m, h)
+		m := v.(map[uint64]mux.Handler)
+		delete(m, id)
 		if len(m) == 0 {
 			return nil
 		}

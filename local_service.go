@@ -76,12 +76,12 @@ func handleLocal() {
 				Cost:   params.Cost,
 				Flags:  params.Flags,
 			}
-			nextHop.add(name, f, mux.RawCacher(ndn.ContentStore, false), loopChecker)
+			nextHop.add(name, f.id, f, loopChecker, mux.RawCacher(ndn.ContentStore, false))
 		}),
 		"/rib/unregister": commandService(func(params *ndn.Parameters, f *face) {
 			name := params.Name.String()
 			delete(f.route, name)
-			nextHop.remove(name, f)
+			nextHop.remove(name, f.id)
 		}),
 		"/rib/list": datasetService(func() interface{} {
 			index := make(map[string]int)
@@ -104,13 +104,11 @@ func handleLocal() {
 		}),
 	} {
 		_, isDatasetService := h.(datasetService)
-		// NOTE: mux.Handler must be comparable
-		h = &struct{ mux.Handler }{h}
 		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
 			if isDatasetService {
-				nextHop.add(prefix+suffix, h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
+				nextHop.add(prefix+suffix, newFaceID(), h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
 			} else {
-				nextHop.add(prefix+suffix, h)
+				nextHop.add(prefix+suffix, newFaceID(), h)
 			}
 		}
 	}

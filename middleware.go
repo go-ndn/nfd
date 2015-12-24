@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/go-ndn/lpm"
@@ -19,9 +18,9 @@ var (
 		m := lpm.NewThreadSafe()
 		return func(next mux.Handler) mux.Handler {
 			return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
-				interestID := fmt.Sprintf("%s/%x", i.Name, i.Nonce)
+				interestID := append(i.Name.Components, i.Nonce)
 				var ok bool
-				m.Update(interestID, func(v interface{}) interface{} {
+				m.UpdateRaw(interestID, func(v interface{}) interface{} {
 					ok = v == nil
 					return struct{}{}
 				}, false)
@@ -30,7 +29,7 @@ var (
 				}
 
 				time.AfterFunc(loopIntv, func() {
-					m.Update(interestID, func(interface{}) interface{} {
+					m.UpdateRaw(interestID, func(interface{}) interface{} {
 						return nil
 					}, false)
 				})
