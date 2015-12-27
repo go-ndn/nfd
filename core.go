@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	lastFaceID = uint64(255)
+	lastFaceID uint64
 	faces      = make(map[uint64]*face)
 
 	key       ndn.Key
