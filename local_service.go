@@ -9,7 +9,7 @@ import (
 type commandService func(*ndn.Parameters, *face)
 
 func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
-	respond := func(resp *ndn.ControlResponse) {
+	respond := func(resp *ndn.CommandResponse) {
 		d := &ndn.Data{Name: i.Name}
 		d.Content, _ = tlv.Marshal(resp, 101)
 		w.SendData(d)
@@ -50,7 +50,7 @@ func (s commandService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 
 	s(params, f)
 
-	respOK := &ndn.ControlResponse{
+	respOK := &ndn.CommandResponse{
 		StatusCode: 200,
 		StatusText: "OK",
 		Parameters: *params,
