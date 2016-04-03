@@ -70,18 +70,16 @@ func (s datasetService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 func handleLocal() {
 	for suffix, h := range map[string]mux.Handler{
 		"/rib/register": commandService(func(params *ndn.Parameters, f *face) {
-			name := params.Name.String()
-			f.route[name] = ndn.Route{
+			f.route[params.Name.String()] = ndn.Route{
 				Origin: params.Origin,
 				Cost:   params.Cost,
 				Flags:  params.Flags,
 			}
-			nextHop.add(name, f.id, f, loopChecker, mux.RawCacher(ndn.ContentStore, false))
+			nextHop.add(params.Name, f.id, f, loopChecker, mux.RawCacher(ndn.ContentStore, false))
 		}),
 		"/rib/unregister": commandService(func(params *ndn.Parameters, f *face) {
-			name := params.Name.String()
-			delete(f.route, name)
-			nextHop.remove(name, f.id)
+			delete(f.route, params.Name.String())
+			nextHop.remove(params.Name, f.id)
 		}),
 		"/rib/list": datasetService(func() interface{} {
 			index := make(map[string]int)
@@ -105,10 +103,11 @@ func handleLocal() {
 	} {
 		_, isDatasetService := h.(datasetService)
 		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
+			name := ndn.NewName(prefix + suffix)
 			if isDatasetService {
-				nextHop.add(prefix+suffix, newFaceID(), h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
+				nextHop.add(name, newFaceID(), h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
 			} else {
-				nextHop.add(prefix+suffix, newFaceID(), h)
+				nextHop.add(name, newFaceID(), h)
 			}
 		}
 	}

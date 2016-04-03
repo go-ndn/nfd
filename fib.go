@@ -23,7 +23,7 @@ func newFIB() *fib {
 }
 
 func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
-	f.MatchRaw(i.Name.Components, func(v interface{}) {
+	f.Match(i.Name.Components, func(v interface{}) {
 		for _, h := range v.(map[uint64]mux.Handler) {
 			h.ServeNDN(w, i)
 			break
@@ -31,12 +31,12 @@ func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	}, true)
 }
 
-func (f *fib) add(name string, id uint64, h mux.Handler, mw ...mux.Middleware) {
+func (f *fib) add(name ndn.Name, id uint64, h mux.Handler, mw ...mux.Middleware) {
 	f.Println("add", name)
 	for _, m := range mw {
 		h = m(h)
 	}
-	f.Update(name, func(v interface{}) interface{} {
+	f.Update(name.Components, func(v interface{}) interface{} {
 		var m map[uint64]mux.Handler
 		if v == nil {
 			m = make(map[uint64]mux.Handler)
@@ -48,9 +48,9 @@ func (f *fib) add(name string, id uint64, h mux.Handler, mw ...mux.Middleware) {
 	}, false)
 }
 
-func (f *fib) remove(name string, id uint64) {
+func (f *fib) remove(name ndn.Name, id uint64) {
 	f.Println("remove", name)
-	f.Update(name, func(v interface{}) interface{} {
+	f.Update(name.Components, func(v interface{}) interface{} {
 		if v == nil {
 			return nil
 		}

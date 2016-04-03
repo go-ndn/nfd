@@ -20,7 +20,7 @@ var (
 			return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
 				interestID := append(i.Name.Components, i.Nonce)
 				var ok bool
-				m.UpdateRaw(interestID, func(v interface{}) interface{} {
+				m.Update(interestID, func(v interface{}) interface{} {
 					ok = v == nil
 					return struct{}{}
 				}, false)
@@ -29,7 +29,7 @@ var (
 				}
 
 				time.AfterFunc(loopIntv, func() {
-					m.UpdateRaw(interestID, func(interface{}) interface{} {
+					m.Update(interestID, func(interface{}) interface{} {
 						return nil
 					}, false)
 				})
