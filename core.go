@@ -5,7 +5,6 @@ import (
 	"net"
 
 	"github.com/go-ndn/log"
-	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 )
 
@@ -21,14 +20,6 @@ var (
 	faceClose  = make(chan uint64)
 
 	nextHop *fib
-
-	// serialize requests
-	serializer = mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
-		reqSend <- &request{
-			Sender:   w,
-			Interest: i,
-		}
-	})
 )
 
 type request struct {
@@ -43,7 +34,7 @@ func newFaceID() (id uint64) {
 
 func run() {
 	nextHop = newFIB()
-	handleLocal()
+	registerService()
 
 	for {
 		select {
@@ -76,7 +67,11 @@ func addFace(conn net.Conn) {
 
 	go func() {
 		for i := range recv {
-			serializer.ServeNDN(f, i)
+			// serialize requests
+			reqSend <- &request{
+				Sender:   f,
+				Interest: i,
+			}
 		}
 		faceClose <- f.id
 		f.Close()

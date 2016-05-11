@@ -67,7 +67,7 @@ func (s datasetService) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	w.SendData(d)
 }
 
-func handleLocal() {
+func registerService() {
 	for suffix, h := range map[string]mux.Handler{
 		"/rib/register": commandService(func(params *ndn.Parameters, f *face) {
 			f.route[params.Name.String()] = ndn.Route{
