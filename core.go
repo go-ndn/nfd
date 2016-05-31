@@ -15,7 +15,7 @@ var (
 	key       ndn.Key
 	timestamp uint64
 
-	reqSend    = make(chan *request)
+	reqSend    = make(chan request, 1024)
 	faceCreate = make(chan net.Conn)
 	faceClose  = make(chan uint64)
 
@@ -49,7 +49,7 @@ func run() {
 }
 
 func addFace(conn net.Conn) {
-	recv := make(chan *ndn.Interest)
+	recv := make(chan *ndn.Interest, 1024)
 
 	f := &face{
 		Face:  ndn.NewFace(conn, recv),
@@ -68,7 +68,7 @@ func addFace(conn net.Conn) {
 	go func() {
 		for i := range recv {
 			// serialize requests
-			reqSend <- &request{
+			reqSend <- request{
 				Sender:   f,
 				Interest: i,
 			}
