@@ -53,11 +53,11 @@ ForwardRTT: 1 consumer and 1 producer directly connect to forwarder. The timer m
 
 ```
 go-nfd
-BenchmarkBurstyForward-8    20000   1129021 ns/op
-BenchmarkForwardRTT-8        30000     58894 ns/op
+BenchmarkBurstyForward-8    20000   1063049 ns/op
+BenchmarkForwardRTT-8        30000     59374 ns/op
 
 nfd
-BenchmarkBurstyForward-8    1000   1730301 ns/op
-BenchmarkForwardRTT-8        30000     59556 ns/op
+BenchmarkBurstyForward-8    1000   2081785 ns/op
+BenchmarkForwardRTT-8        30000     60595 ns/op
 ```
 
