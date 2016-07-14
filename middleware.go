@@ -13,7 +13,7 @@ const (
 )
 
 var (
-	// stop interest with same name and nonce from propagating
+	// loopChecker stops interest with same name and nonce from propagating.
 	loopChecker = func() mux.Middleware {
 		var m loopMatcher
 		var mu sync.Mutex
@@ -56,6 +56,9 @@ var (
 		}
 	}()
 
-	// create another namespace for local service
-	cacher = mux.RawCacher(ndn.NewCache(65536), false)
+	// defaultCacher caches packets that are not generated locally.
+	defaultCacher = mux.RawCacher(ndn.NewCache(65536), false)
+
+	// localCacher caches packets generated from local services.
+	localCacher = mux.RawCacher(ndn.NewCache(65536), false)
 )

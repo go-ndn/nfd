@@ -75,7 +75,7 @@ func registerService() {
 				Cost:   params.Cost,
 				Flags:  params.Flags,
 			}
-			nextHop.add(params.Name, f.id, f, loopChecker, mux.RawCacher(ndn.ContentStore, false))
+			nextHop.add(params.Name, f.id, f, loopChecker, defaultCacher)
 		}),
 		"/rib/unregister": commandService(func(params *ndn.Parameters, f *face) {
 			delete(f.route, params.Name.String())
@@ -105,7 +105,7 @@ func registerService() {
 		for _, prefix := range []string{"/localhost/nfd", "/localhop/nfd"} {
 			name := ndn.NewName(prefix + suffix)
 			if isDatasetService {
-				nextHop.add(name, newFaceID(), h, mux.Versioner, mux.Segmentor(4096), cacher, mux.Queuer)
+				nextHop.add(name, newFaceID(), h, mux.Versioner, mux.Segmentor(4096), localCacher, mux.Queuer)
 			} else {
 				nextHop.add(name, newFaceID(), h)
 			}
