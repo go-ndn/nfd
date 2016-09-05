@@ -19,9 +19,6 @@ func (n *loopNode) empty() bool {
 
 func (n *loopNode) update(key []lpm.Component, depth int, f func([]lpm.Component, map[uint64]struct{}) map[uint64]struct{}, exist, all bool) {
 	try := func() {
-		if depth == 0 {
-			return
-		}
 		if !exist || !loopNodeValEmpty(n.val) {
 			n.val = f(key[:depth], n.val)
 		}
@@ -61,9 +58,6 @@ func (n *loopNode) update(key []lpm.Component, depth int, f func([]lpm.Component
 
 func (n *loopNode) match(key []lpm.Component, depth int, f func(map[uint64]struct{}), exist bool) {
 	try := func() {
-		if depth == 0 {
-			return
-		}
 		if !exist || !loopNodeValEmpty(n.val) {
 			f(n.val)
 		}

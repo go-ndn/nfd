@@ -11,9 +11,9 @@ type fib struct {
 	log.Logger
 }
 
-func newFIB() *fib {
+func newFIB(ctx *context) *fib {
 	f := new(fib)
-	if *flagDebug {
+	if ctx.Debug {
 		f.Logger = log.New(log.Stderr, "[fib] ")
 	} else {
 		f.Logger = log.Discard
@@ -30,11 +30,8 @@ func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	}, true)
 }
 
-func (f *fib) add(name ndn.Name, id uint64, h mux.Handler, mw ...mux.Middleware) {
+func (f *fib) add(name ndn.Name, id uint64, h mux.Handler) {
 	f.Println("add", name)
-	for _, m := range mw {
-		h = m(h)
-	}
 	f.Update(name.Components, func(m map[uint64]mux.Handler) map[uint64]mux.Handler {
 		if m == nil {
 			m = make(map[uint64]mux.Handler)

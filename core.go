@@ -3,87 +3,126 @@ package main
 import (
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/go-ndn/log"
+	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 )
 
-var (
+type core struct {
+	face       map[uint64]*face
 	lastFaceID uint64
-	faces      = make(map[uint64]*face)
+	timestamp  uint64
 
-	key       ndn.Key
-	timestamp uint64
+	reqSend    chan request
+	faceCreate chan net.Conn
+	faceClose  chan uint64
 
-	reqSend    = make(chan request, 1024)
-	faceCreate = make(chan net.Conn)
-	faceClose  = make(chan uint64)
-
-	nextHop *fib
-)
+	localCacher mux.Middleware
+	verifier    mux.Handler
+	nextHop     *fib
+	*mux.Mux
+}
 
 type request struct {
 	ndn.Sender
 	*ndn.Interest
 }
 
-func newFaceID() (id uint64) {
-	lastFaceID++
-	return lastFaceID
+func newCore(ctx *context) *core {
+	nextHop := newFIB(ctx)
+	// defaultCacher caches packets that are not generated locally.
+	defaultCacher := mux.RawCacher(ndn.NewCache(65536), false)
+	// localCacher caches packets generated from local services.
+	localCacher := mux.RawCacher(ndn.NewCache(65536), false)
+	c := &core{
+		face:        make(map[uint64]*face),
+		reqSend:     make(chan request, 1024),
+		faceCreate:  make(chan net.Conn),
+		faceClose:   make(chan uint64),
+		localCacher: localCacher,
+		verifier:    mux.Verifier(ctx.Rule...)(defaultCacher(nextHop)),
+		nextHop:     nextHop,
+		Mux:         mux.New(),
+	}
+	// register local service
+	c.registerService()
+
+	// serve certificates
+	for _, path := range ctx.NDNCertPath {
+		name, h := mux.StaticFile(path)
+		nextHop.add(ndn.NewName(name), 0, h)
+	}
+
+	c.HandleFunc("/", func(w ndn.Sender, i *ndn.Interest) {
+		go nextHop.ServeNDN(w, i)
+	}, loopChecker(time.Minute), defaultCacher)
+	return c
 }
 
-func run() {
-	nextHop = newFIB()
-	registerService()
+func (c *core) Accept(conn net.Conn) {
+	c.faceCreate <- conn
+}
 
+func (c *core) newFaceID() uint64 {
+	c.lastFaceID++
+	return c.lastFaceID
+}
+
+func (c *core) Start(ctx *context) {
 	for {
 		select {
-		case conn := <-faceCreate:
-			addFace(conn)
-		case faceID := <-faceClose:
-			removeFace(faceID)
-		case req := <-reqSend:
-			nextHop.ServeNDN(req.Sender, req.Interest)
+		case conn := <-c.faceCreate:
+			c.addFace(ctx, conn)
+		case faceID := <-c.faceClose:
+			c.removeFace(faceID)
+		case req := <-c.reqSend:
+			c.ServeNDN(req.Sender, req.Interest)
 		}
 	}
 }
 
-func addFace(conn net.Conn) {
+func (c *core) addFace(ctx *context, conn net.Conn) {
 	recv := make(chan *ndn.Interest, 1024)
 
 	f := &face{
 		Face:  ndn.NewFace(conn, recv),
-		id:    newFaceID(),
+		id:    c.newFaceID(),
 		route: make(map[string]ndn.Route),
 	}
 
-	if *flagDebug {
+	if ctx.Debug {
 		f.Logger = log.New(log.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()))
 	} else {
 		f.Logger = log.Discard
 	}
 
-	faces[f.id] = f
+	c.face[f.id] = f
 
 	go func() {
+		serializer := mux.RawCacher(ndn.NewCache(1024), false)(
+			mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
+				// serialize requests
+				c.reqSend <- request{
+					Sender:   w,
+					Interest: i,
+				}
+			}))
 		for i := range recv {
-			// serialize requests
-			reqSend <- request{
-				Sender:   f,
-				Interest: i,
-			}
+			serializer.ServeNDN(f, i)
 		}
-		faceClose <- f.id
+		c.faceClose <- f.id
 		f.Close()
 		f.Println("face removed")
 	}()
 	f.Println("face created")
 }
 
-func removeFace(faceID uint64) {
-	f := faces[faceID]
-	delete(faces, faceID)
+func (c *core) removeFace(faceID uint64) {
+	f := c.face[faceID]
+	delete(c.face, faceID)
 	for name := range f.route {
-		nextHop.remove(ndn.NewName(name), faceID)
+		c.nextHop.remove(ndn.NewName(name), faceID)
 	}
 }

@@ -22,9 +22,6 @@ func (n *fibNode) empty() bool {
 
 func (n *fibNode) update(key []lpm.Component, depth int, f func([]lpm.Component, map[uint64]mux.Handler) map[uint64]mux.Handler, exist, all bool) {
 	try := func() {
-		if depth == 0 {
-			return
-		}
 		if !exist || !fibNodeValEmpty(n.val) {
 			n.val = f(key[:depth], n.val)
 		}
@@ -64,9 +61,6 @@ func (n *fibNode) update(key []lpm.Component, depth int, f func([]lpm.Component,
 
 func (n *fibNode) match(key []lpm.Component, depth int, f func(map[uint64]mux.Handler), exist bool) {
 	try := func() {
-		if depth == 0 {
-			return
-		}
 		if !exist || !fibNodeValEmpty(n.val) {
 			f(n.val)
 		}

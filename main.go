@@ -1,56 +1,30 @@
 package main
 
 import (
-	"encoding/json"
-	"flag"
 	"net/http"
 	_ "net/http/pprof"
-	"os"
 
 	"github.com/go-ndn/log"
-	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/packet"
 )
 
-var (
-	flagConfig = flag.String("config", "nfd.json", "config path")
-	flagDebug  = flag.Bool("debug", false, "enable logging")
-)
-
 func main() {
-	flag.Parse()
+	ctx, err := background()
+	if err != nil {
+		log.Println(err)
+		return
+	}
 
 	// pprof
 	go http.ListenAndServe(":6060", nil)
 
-	// config
-	configFile, err := os.Open(*flagConfig)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer configFile.Close()
-	err = json.NewDecoder(configFile).Decode(&config)
-	if err != nil {
-		log.Fatalln(err)
-	}
-
-	// key
-	cert, err := os.Open(config.NDNCertPath)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	defer cert.Close()
-	key, err = ndn.DecodeCertificate(cert)
-	if err != nil {
-		log.Fatalln(err)
-	}
-	log.Println("key", key.Locator())
-
+	c := newCore(ctx)
 	// create faces
-	for _, u := range config.Listen {
+	for _, u := range ctx.Listen {
 		ln, err := packet.Listen(u.Network, u.Address)
 		if err != nil {
-			log.Fatalln(err)
+			log.Println(err)
+			return
 		}
 		defer ln.Close()
 		log.Println("listen", u.Network, u.Address)
@@ -60,10 +34,9 @@ func main() {
 				if err != nil {
 					continue
 				}
-				faceCreate <- conn
+				c.Accept(conn)
 			}
 		}()
 	}
-
-	run()
+	c.Start(ctx)
 }

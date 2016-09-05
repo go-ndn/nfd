@@ -14,21 +14,35 @@ Usage of ./nfd:
     	enable logging
 ```
 
+`NDNCertPath` specifies a list of certificates that are only available on local file system. `Rule` is used for authorization; please see [VerifyRule](https://godoc.org/github.com/go-ndn/mux#VerifyRule).
+
 ```
 {
-	"NDNCertPath": "key/default.ndncert",
-	"Listen": [
-		{
-			"Network": "tcp",
-			"Address": ":6363"
-		},
-		{
-			"Network": "udp",
-			"Address": ":6363"
-		}
-	]
+  "NDNCertPath": ["key/default.ndncert"],
+  "Rule": [
+    {
+      "DataPattern": "^/ndn/guest/alice/1434508942077/KEY/%00%00$",
+      "DataSHA256": "e3a64ce49711fdf29e91a08772599384b747fd924b90a7835079146fcb8d915a"
+    },
+    {
+      "DataPattern": ".*",
+      "KeyPattern": "^/ndn/guest/alice/1434508942077/KEY/%00%00$"
+    }
+  ],
+  "Listen": [
+    {
+      "Network": "tcp",
+      "Address": ":6363"
+    },
+    {
+      "Network": "udp",
+      "Address": ":6363"
+    }
+  ]
 }
 ```
+
+In this example, `/ndn/guest/alice/1434508942077/KEY/%00%00` is stored in `key/default.ndncert`, and is the trust anchor. We trust any command that is signed by this trust anchor, and by any key that is signed by this trust anchor.
 
 ## Install
 ```
@@ -53,8 +67,8 @@ ForwardRTT: 1 consumer and 1 producer directly connect to forwarder. The timer m
 
 ```
 go-nfd
-BenchmarkBurstyForward-8    20000   1063049 ns/op
-BenchmarkForwardRTT-8        30000     59374 ns/op
+BenchmarkBurstyForward-8       	    2000       	    960958 ns/op
+BenchmarkForwardRTT-8          	   30000       	     54651 ns/op
 
 nfd
 BenchmarkBurstyForward-8    1000   2081785 ns/op
