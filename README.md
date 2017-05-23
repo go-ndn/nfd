@@ -4,8 +4,6 @@ This is an alternative implementation of nfd, NDN forwarding daemon.
 
 Each face runs in its own goroutine, and the core serves faces' forwarding requests with channel communication. By using sensible strategies and only one root certificate, go-nfd tries to be as simple as possible and compatible with nfd.
 
-The author is taylorchu (Tai-Lin Chu). This package is released under GPL2 license.
-
 ```
 Usage of ./nfd:
   -config string
