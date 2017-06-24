@@ -14,8 +14,8 @@ type face struct {
 
 func (f *face) ServeNDN(w ndn.Sender, i *ndn.Interest) {
 	f.Println("forward", i.Name)
-	d, ok := <-f.SendInterest(i)
-	if !ok {
+	d, err := f.SendInterest(i)
+	if err != nil {
 		return
 	}
 	f.Println("receive", d.Name)

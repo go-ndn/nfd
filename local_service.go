@@ -11,10 +11,11 @@ type collector struct {
 	*ndn.Data
 }
 
-func (c *collector) SendData(d *ndn.Data) {
+func (c *collector) SendData(d *ndn.Data) error {
 	if c.Data == nil {
 		c.Data = d
 	}
+	return nil
 }
 
 func (c *core) verify(cmd *ndn.Command) bool {
