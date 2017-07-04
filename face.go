@@ -12,12 +12,12 @@ type face struct {
 	route map[string]ndn.Route
 }
 
-func (f *face) ServeNDN(w ndn.Sender, i *ndn.Interest) {
+func (f *face) ServeNDN(w ndn.Sender, i *ndn.Interest) error {
 	f.Println("forward", i.Name)
 	d, err := f.SendInterest(i)
 	if err != nil {
-		return
+		return err
 	}
 	f.Println("receive", d.Name)
-	w.SendData(d)
+	return w.SendData(d)
 }

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"errors"
+
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/tlv"
@@ -18,37 +20,46 @@ func (c *collector) SendData(d *ndn.Data) error {
 	return nil
 }
 
-func (c *core) verify(cmd *ndn.Command) bool {
+var (
+	errInvalidTimestamp = errors.New("invalid timestamp")
+	errNoData           = errors.New("no data")
+)
+
+func (c *core) verify(cmd *ndn.Command) error {
 	if cmd.Timestamp <= c.timestamp {
-		return false
+		return errInvalidTimestamp
 	}
 	r := &collector{}
-	c.verifier.ServeNDN(r, &ndn.Interest{Name: cmd.SignatureInfo.SignatureInfo.KeyLocator.Name})
+	err := c.verifier.ServeNDN(r, &ndn.Interest{Name: cmd.SignatureInfo.SignatureInfo.KeyLocator.Name})
+	if err != nil {
+		return err
+	}
 	if r.Data == nil {
-		return false
+		return errNoData
 	}
 	key, err := ndn.CertificateFromData(r.Data)
 	if err != nil {
-		return false
+		return err
 	}
-	if key.Verify(cmd, cmd.SignatureValue.SignatureValue) != nil {
-		return false
-	}
-	return true
+	return key.Verify(cmd, cmd.SignatureValue.SignatureValue)
 }
 
 func (c *core) commandService(s func(*ndn.Parameters, *face)) mux.Handler {
-	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
-		respond := func(resp *ndn.CommandResponse) {
-			d := &ndn.Data{Name: i.Name}
-			d.Content, _ = tlv.Marshal(resp, 101)
-			w.SendData(d)
+	return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) error {
+		respond := func(resp *ndn.CommandResponse) error {
+			content, err := tlv.Marshal(resp, 101)
+			if err != nil {
+				return err
+			}
+			return w.SendData(&ndn.Data{
+				Name:    i.Name,
+				Content: content,
+			})
 		}
 		cmd := new(ndn.Command)
 		tlv.Copy(cmd, &i.Name)
-		if !c.verify(cmd) {
-			respond(respNotAuthorized)
-			return
+		if c.verify(cmd) != nil {
+			return respond(respNotAuthorized)
 		}
 		c.timestamp = cmd.Timestamp
 		params := &cmd.Parameters.Parameters
@@ -74,8 +85,7 @@ func (c *core) commandService(s func(*ndn.Parameters, *face)) mux.Handler {
 			f, ok = c.face[params.FaceID]
 		}
 		if !ok {
-			respond(respIncorrectParams)
-			return
+			return respond(respIncorrectParams)
 		}
 
 		s(params, f)
@@ -86,16 +96,21 @@ func (c *core) commandService(s func(*ndn.Parameters, *face)) mux.Handler {
 			Parameters: *params,
 		}
 		respOK.Parameters.FaceID = f.id
-		respond(respOK)
+		return respond(respOK)
 	})
 }
 
 func (c *core) datasetService(s func() interface{}) mux.Handler {
 	return mux.Queuer(c.localCacher(mux.Segmentor(4096)(mux.Versioner(
-		mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
-			d := &ndn.Data{Name: i.Name}
-			d.Content, _ = tlv.Marshal(s(), 128)
-			w.SendData(d)
+		mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) error {
+			content, err := tlv.Marshal(s(), 128)
+			if err != nil {
+				return err
+			}
+			return w.SendData(&ndn.Data{
+				Name:    i.Name,
+				Content: content,
+			})
 		})))))
 }
 

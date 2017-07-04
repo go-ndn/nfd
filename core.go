@@ -55,8 +55,9 @@ func newCore(ctx *context) *core {
 		nextHop.add(ndn.NewName(name), 0, h)
 	}
 
-	c.HandleFunc("/", func(w ndn.Sender, i *ndn.Interest) {
+	c.HandleFunc("/", func(w ndn.Sender, i *ndn.Interest) error {
 		go nextHop.ServeNDN(w, i)
+		return nil
 	}, loopChecker(time.Minute), defaultCacher)
 	return c
 }
@@ -102,12 +103,13 @@ func (c *core) addFace(ctx *context, conn net.Conn) {
 
 	go func() {
 		serializer := mux.RawCacher(ndn.NewCache(1024), false)(
-			mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
+			mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) error {
 				// serialize requests
 				c.reqSend <- request{
 					Sender:   w,
 					Interest: i,
 				}
+				return nil
 			}))
 		for i := range recv {
 			serializer.ServeNDN(f, i)
