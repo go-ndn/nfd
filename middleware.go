@@ -13,7 +13,7 @@ func loopChecker(d time.Duration) mux.Middleware {
 	var m loopMatcher
 	var mu sync.Mutex
 	return func(next mux.Handler) mux.Handler {
-		return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) {
+		return mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) error {
 			var ok bool
 			mu.Lock()
 			m.Update(i.Name.Components, func(m map[uint64]struct{}) map[uint64]struct{} {
@@ -29,7 +29,7 @@ func loopChecker(d time.Duration) mux.Middleware {
 			}, false)
 			mu.Unlock()
 			if ok {
-				return
+				return nil
 			}
 
 			time.AfterFunc(d, func() {
@@ -46,7 +46,7 @@ func loopChecker(d time.Duration) mux.Middleware {
 				}, false)
 				mu.Unlock()
 			})
-			next.ServeNDN(w, i)
+			return next.ServeNDN(w, i)
 		})
 	}
 }

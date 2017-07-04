@@ -21,13 +21,14 @@ func newFIB(ctx *context) *fib {
 	return f
 }
 
-func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) {
+func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) error {
 	f.Match(i.Name.Components, func(m map[uint64]mux.Handler) {
 		for _, h := range m {
 			h.ServeNDN(w, i)
 			break
 		}
 	}, true)
+	return nil
 }
 
 func (f *fib) add(name ndn.Name, id uint64, h mux.Handler) {
