@@ -128,6 +128,7 @@ func (c *core) registerService() {
 
 func (c *core) registerRIB(params *ndn.Parameters, f *face) {
 	f.route[params.Name.String()] = ndn.Route{
+		FaceID: f.id,
 		Origin: params.Origin,
 		Cost:   params.Cost,
 		Flags:  params.Flags,
@@ -143,9 +144,8 @@ func (c *core) unregisterRIB(params *ndn.Parameters, f *face) {
 func (c *core) listRIB() interface{} {
 	index := make(map[string]int)
 	var routes []ndn.RIBEntry
-	for id, f := range c.face {
+	for _, f := range c.face {
 		for name, route := range f.route {
-			route.FaceID = id
 			if i, ok := index[name]; ok {
 				routes[i].Route = append(routes[i].Route, route)
 			} else {
