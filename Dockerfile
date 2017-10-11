@@ -1,9 +1,7 @@
 FROM golang:alpine AS build
 
 COPY . /go/src/github.com/go-ndn/nfd
-
-RUN apk --no-cache add git \
-  && go get -v github.com/go-ndn/nfd/...
+RUN go get -v github.com/go-ndn/nfd/...
 
 FROM alpine
 

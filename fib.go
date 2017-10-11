@@ -1,24 +1,14 @@
 package main
 
 import (
-	"github.com/go-ndn/log"
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
+	"github.com/sirupsen/logrus"
 )
 
 type fib struct {
 	fibMatcher
-	log.Logger
-}
-
-func newFIB(ctx *context) *fib {
-	f := new(fib)
-	if ctx.Debug {
-		f.Logger = log.New(log.Stderr, "[fib] ")
-	} else {
-		f.Logger = log.Discard
-	}
-	return f
+	logrus.FieldLogger
 }
 
 func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) error {
@@ -32,7 +22,10 @@ func (f *fib) ServeNDN(w ndn.Sender, i *ndn.Interest) error {
 }
 
 func (f *fib) add(name ndn.Name, id uint64, h mux.Handler) {
-	f.Println("add", name)
+	f.WithFields(logrus.Fields{
+		"name": name,
+		"face": id,
+	}).Info("add route")
 	f.Update(name.Components, func(m map[uint64]mux.Handler) map[uint64]mux.Handler {
 		if m == nil {
 			m = make(map[uint64]mux.Handler)
@@ -43,7 +36,10 @@ func (f *fib) add(name ndn.Name, id uint64, h mux.Handler) {
 }
 
 func (f *fib) remove(name ndn.Name, id uint64) {
-	f.Println("remove", name)
+	f.WithFields(logrus.Fields{
+		"name": name,
+		"face": id,
+	}).Info("remove route")
 	f.Update(name.Components, func(m map[uint64]mux.Handler) map[uint64]mux.Handler {
 		if m == nil {
 			return nil

@@ -1,13 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"net"
+	"os"
 	"time"
 
-	"github.com/go-ndn/log"
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
+	"github.com/sirupsen/logrus"
 )
 
 type core struct {
@@ -23,6 +23,8 @@ type core struct {
 	verifier    mux.Handler
 	nextHop     *fib
 	*mux.Mux
+
+	trustedCert []ndn.Key
 }
 
 type request struct {
@@ -31,11 +33,18 @@ type request struct {
 }
 
 func newCore(ctx *context) *core {
-	nextHop := newFIB(ctx)
+	nextHop := &fib{
+		FieldLogger: logrus.WithField("module", "fib"),
+	}
 	// defaultCacher caches packets that are not generated locally.
-	defaultCacher := mux.RawCacher(ndn.NewCache(65536), false)
+	defaultCacher := mux.RawCacher(&mux.CacherOptions{
+		Cache:       ndn.NewCache(65536),
+		SkipPrivate: true,
+	})
 	// localCacher caches packets generated from local services.
-	localCacher := mux.RawCacher(ndn.NewCache(65536), false)
+	localCacher := mux.RawCacher(&mux.CacherOptions{
+		Cache: ndn.NewCache(65536),
+	})
 	c := &core{
 		face:        make(map[uint64]*face),
 		reqSend:     make(chan request, 1024),
@@ -46,20 +55,38 @@ func newCore(ctx *context) *core {
 		nextHop:     nextHop,
 		Mux:         mux.New(),
 	}
+
+	for _, path := range ctx.NDNCertPath {
+		key, err := decodeCertificate(path)
+		if err != nil {
+			logrus.WithError(err).Error("decode certificate")
+			continue
+		}
+		c.trustedCert = append(c.trustedCert, key)
+	}
+
 	// register local service
 	c.registerService()
-
-	// serve certificates
-	for _, path := range ctx.NDNCertPath {
-		name, h := mux.StaticFile(path)
-		nextHop.add(ndn.NewName(name), 0, h)
-	}
 
 	c.HandleFunc("/", func(w ndn.Sender, i *ndn.Interest) error {
 		go nextHop.ServeNDN(w, i)
 		return nil
 	}, loopChecker(time.Minute), defaultCacher)
 	return c
+}
+
+func decodeCertificate(path string) (ndn.Key, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	key, err := ndn.DecodeCertificate(f)
+	if err != nil {
+		return nil, err
+	}
+	return key, nil
 }
 
 func (c *core) Accept(conn net.Conn) {
@@ -71,11 +98,11 @@ func (c *core) newFaceID() uint64 {
 	return c.lastFaceID
 }
 
-func (c *core) Start(ctx *context) {
+func (c *core) Start() {
 	for {
 		select {
 		case conn := <-c.faceCreate:
-			c.addFace(ctx, conn)
+			c.addFace(conn)
 		case faceID := <-c.faceClose:
 			c.removeFace(faceID)
 		case req := <-c.reqSend:
@@ -84,25 +111,27 @@ func (c *core) Start(ctx *context) {
 	}
 }
 
-func (c *core) addFace(ctx *context, conn net.Conn) {
+func (c *core) addFace(conn net.Conn) {
 	recv := make(chan *ndn.Interest, 1024)
 
+	id := c.newFaceID()
 	f := &face{
 		Face:  ndn.NewFace(conn, recv),
-		id:    c.newFaceID(),
+		id:    id,
 		route: make(map[string]ndn.Route),
-	}
-
-	if ctx.Debug {
-		f.Logger = log.New(log.Stderr, fmt.Sprintf("[%s] ", conn.RemoteAddr()))
-	} else {
-		f.Logger = log.Discard
+		FieldLogger: logrus.WithFields(logrus.Fields{
+			"face":   id,
+			"remote": conn.RemoteAddr(),
+		}),
 	}
 
 	c.face[f.id] = f
 
 	go func() {
-		serializer := mux.RawCacher(ndn.NewCache(1024), false)(
+		serializer := mux.RawCacher(&mux.CacherOptions{
+			Cache:       ndn.NewCache(1024),
+			SkipPrivate: true,
+		})(
 			mux.HandlerFunc(func(w ndn.Sender, i *ndn.Interest) error {
 				// serialize requests
 				c.reqSend <- request{
@@ -116,9 +145,9 @@ func (c *core) addFace(ctx *context, conn net.Conn) {
 		}
 		c.faceClose <- f.id
 		f.Close()
-		f.Println("face removed")
+		f.Info("face removed")
 	}()
-	f.Println("face created")
+	f.Info("face created")
 }
 
 func (c *core) removeFace(faceID uint64) {

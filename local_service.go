@@ -6,6 +6,7 @@ import (
 	"github.com/go-ndn/mux"
 	"github.com/go-ndn/ndn"
 	"github.com/go-ndn/tlv"
+	"github.com/sirupsen/logrus"
 )
 
 type collector struct {
@@ -28,6 +29,13 @@ var (
 func (c *core) verify(cmd *ndn.Command) error {
 	if cmd.Timestamp <= c.timestamp {
 		return errInvalidTimestamp
+	}
+
+	for _, key := range c.trustedCert {
+		if cmd.SignatureInfo.SignatureInfo.KeyLocator.Name.Compare(key.Locator()) != 0 {
+			continue
+		}
+		return key.Verify(cmd, cmd.SignatureValue.SignatureValue)
 	}
 	r := &collector{}
 	err := c.verifier.ServeNDN(r, &ndn.Interest{Name: cmd.SignatureInfo.SignatureInfo.KeyLocator.Name})
@@ -58,7 +66,14 @@ func (c *core) commandService(s func(*ndn.Parameters, *face)) mux.Handler {
 		}
 		cmd := new(ndn.Command)
 		tlv.Copy(cmd, &i.Name)
-		if c.verify(cmd) != nil {
+
+		log := logrus.WithFields(logrus.Fields{
+			"module":  cmd.Module,
+			"command": cmd.Command,
+		})
+		err := c.verify(cmd)
+		if err != nil {
+			log.WithError(err).Error("command not authorized")
 			return respond(respNotAuthorized)
 		}
 		c.timestamp = cmd.Timestamp
@@ -85,6 +100,7 @@ func (c *core) commandService(s func(*ndn.Parameters, *face)) mux.Handler {
 			f, ok = c.face[params.FaceID]
 		}
 		if !ok {
+			log.Error("face not found")
 			return respond(respIncorrectParams)
 		}
 
@@ -108,7 +124,10 @@ func (c *core) datasetService(s func() interface{}) mux.Handler {
 				return err
 			}
 			return w.SendData(&ndn.Data{
-				Name:    i.Name,
+				Name: i.Name,
+				MetaInfo: ndn.MetaInfo{
+					FreshnessPeriod: 1000,
+				},
 				Content: content,
 			})
 		})))))
