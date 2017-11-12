@@ -1,0 +1,19 @@
+spec:
+  - name: fib
+    local: true
+    import: github.com/go-ndn/lpm/matcher
+    typeMap:
+      Type:
+        expr: map[uint64]mux.Handler
+        import:
+          - github.com/go-ndn/mux
+      TypeMatcher:
+        expr: fibMatcher
+  - name: loop
+    local: true
+    import: github.com/go-ndn/lpm/matcher
+    typeMap:
+      Type:
+        expr: map[uint64]struct{}
+      TypeMatcher:
+        expr: loopMatcher
